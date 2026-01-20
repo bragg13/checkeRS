@@ -1,12 +1,14 @@
-use std::{io, string};
+use std::io;
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::{Constraint, Layout, Margin, Rect},
+    layout::{
+        Constraint::{self, Fill, Length, Min, Percentage, Ratio},
+        Layout, Margin, Rect,
+    },
     style::Stylize,
-    symbols::border,
     text::{Line, Text},
     widgets::{Block, Padding, Paragraph, Widget},
 };
@@ -81,38 +83,62 @@ impl Widget for &App {
             .render(area, buf);
 
         let vertical_layout =
-            Layout::vertical([Constraint::Percentage(10), Constraint::Percentage(90)]).spacing(1);
+            Layout::vertical([Constraint::Percentage(5), Constraint::Percentage(95)]).spacing(1);
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
+        let info_inner = info_area.inner(Margin::new(1, 1));
+        let board_inner = board_area.inner(Margin::new(1, 1));
 
+        // info area
         Paragraph::new(vec![
             Line::from(vec!["player: ".into(), "ciccio".green()]).left_aligned(),
             Line::from(vec!["opponent".into(), "pollo".red()]).left_aligned(),
         ])
-        .render(info_area, buf);
+        .render(info_inner, buf);
 
-        // let title = Line::from(" Counter App Tutorial ".bold());
-        // let instructions = Line::from(vec![
-        //     " Decrement ".into(),
-        //     "<Left>".blue().bold(),
-        //     " Increment ".into(),
-        //     "<Right>".blue().bold(),
-        //     " Quit ".into(),
-        //     "<Q> ".blue().bold(),
-        // ]);
-        // let block = Block::bordered()
-        //     .title(title.centered())
-        //     .title_bottom(instructions.centered())
-        //     .border_set(border::ROUNDED);
+        // board
+        let cell_size = (std::cmp::min(board_inner.width, board_inner.height)) / 8;
+        let offset_h = (board_inner.width - cell_size * 8) / 2;
 
-        // let counter_text = Text::from(vec![Line::from(vec![
-        //     "Value: ".into(),
-        //     self.counter.to_string().yellow(),
-        // ])]);
+        let rows = Layout::vertical([
+            Fill(1),
+            Fill(1),
+            Fill(1),
+            Fill(1),
+            Fill(1),
+            Fill(1),
+            Fill(1),
+            Fill(1),
+            Min(0),
+        ])
+        .split(
+            board_inner
+                .inner(Margin::new(offset_h, 0))
+                .centered_horizontally(Constraint::Length(board_inner.width)),
+        );
 
-        // Paragraph::new(counter_text)
-        //     .centered()
-        //     .block(block)
-        //     .render(area, buf);
-        // Paragraph::new(Text::from("ciao")).render(area, buf);
+        let cells = rows.iter().flat_map(|row| {
+            Layout::horizontal([
+                Length(cell_size),
+                Length(cell_size),
+                Length(cell_size),
+                Length(cell_size),
+                Length(cell_size),
+                Length(cell_size),
+                Length(cell_size),
+                Length(cell_size),
+                Min(0),
+            ])
+            .split(*row)
+            .iter()
+            .copied()
+            .take(8)
+            .collect::<Vec<Rect>>()
+        });
+
+        for (i, cell) in cells.enumerate() {
+            Paragraph::new(format!("{:02}", i))
+                .block(Block::bordered())
+                .render(cell, buf);
+        }
     }
 }
