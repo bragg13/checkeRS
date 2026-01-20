@@ -1,4 +1,4 @@
-use std::io;
+use std::{cell, io};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -85,54 +85,28 @@ impl Widget for &App {
         let vertical_layout =
             Layout::vertical([Constraint::Percentage(5), Constraint::Percentage(95)]).spacing(1);
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
-        let info_inner = info_area.inner(Margin::new(1, 1));
-        let board_inner = board_area.inner(Margin::new(1, 1));
 
         // info area
         Paragraph::new(vec![
             Line::from(vec!["player: ".into(), "ciccio".green()]).left_aligned(),
-            Line::from(vec!["opponent".into(), "pollo".red()]).left_aligned(),
+            Line::from(vec!["opponent: ".into(), "pollo".red()]).left_aligned(),
         ])
-        .render(info_inner, buf);
+        .render(info_area, buf);
 
         // board
-        let cell_size = (std::cmp::min(board_inner.width, board_inner.height)) / 8;
-        let offset_h = (board_inner.width - cell_size * 8) / 2;
-
-        let rows = Layout::vertical([
-            Fill(1),
-            Fill(1),
-            Fill(1),
-            Fill(1),
-            Fill(1),
-            Fill(1),
-            Fill(1),
-            Fill(1),
-            Min(0),
-        ])
-        .split(
-            board_inner
-                .inner(Margin::new(offset_h, 0))
-                .centered_horizontally(Constraint::Length(board_inner.width)),
-        );
+        let cell_size = board_area.height / 8;
+        let rows = Layout::vertical([Length(cell_size); 8])
+            .flex(ratatui::layout::Flex::Start)
+            .split(board_area);
 
         let cells = rows.iter().flat_map(|row| {
-            Layout::horizontal([
-                Length(cell_size),
-                Length(cell_size),
-                Length(cell_size),
-                Length(cell_size),
-                Length(cell_size),
-                Length(cell_size),
-                Length(cell_size),
-                Length(cell_size),
-                Min(0),
-            ])
-            .split(*row)
-            .iter()
-            .copied()
-            .take(8)
-            .collect::<Vec<Rect>>()
+            Layout::horizontal([Length(cell_size * 2); 8])
+                .flex(ratatui::layout::Flex::Center)
+                .split(*row)
+                .iter()
+                .copied()
+                .take(8)
+                .collect::<Vec<Rect>>()
         });
 
         for (i, cell) in cells.enumerate() {
