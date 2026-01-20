@@ -1,4 +1,4 @@
-use std::io;
+use std::{cell, io};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -14,19 +14,16 @@ use ratatui::{
 };
 
 static CELL_N: usize = 8;
+static PAWN_N: usize = 16;
+static BOARD_SIZE: usize = CELL_N * CELL_N;
 
 fn main() -> io::Result<()> {
-    ratatui::run(|terminal| App::default().run(terminal))
-}
-
-#[derive(Debug, Default)]
-pub struct Grid {
-    cells: Vec<usize>,
+    ratatui::run(|terminal| App::new().run(terminal))
 }
 
 #[derive(Debug, Default)]
 pub struct App {
-    grid: Grid,
+    grid: Vec<usize>,
     is_turn: usize,
     cursor_cell: usize,
     selected_cell: usize,
@@ -34,6 +31,23 @@ pub struct App {
 }
 
 impl App {
+    pub fn new() -> Self {
+        let mut grid = vec![0; CELL_N * CELL_N];
+        for i in 0..PAWN_N {
+            grid[i] = 1;
+        }
+        for j in (BOARD_SIZE - PAWN_N)..BOARD_SIZE {
+            grid[j] = 2;
+        }
+        Self {
+            grid,
+            is_turn: 1,
+            cursor_cell: 0,
+            selected_cell: 0,
+            exit: false,
+        }
+    }
+
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
@@ -145,7 +159,7 @@ impl Widget for &App {
 
         // probably there's a cleaner way
         for (i, cell) in cells.enumerate() {
-            let c = Paragraph::new(format!("{:02}", i)).block(Block::bordered());
+            let c = Paragraph::new(format!("{:01}", self.grid[i])).block(Block::bordered());
             if i == self.cursor_cell {
                 c.on_light_green().render(cell, buf);
             } else if i == self.selected_cell {
