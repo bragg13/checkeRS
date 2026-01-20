@@ -1,4 +1,4 @@
-use std::{cell, io};
+use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -8,18 +8,28 @@ use ratatui::{
         Constraint::{self, Fill, Length, Min, Percentage, Ratio},
         Layout, Margin, Rect,
     },
-    style::Stylize,
+    style::{Color, Stylize},
     text::{Line, Text},
     widgets::{Block, Padding, Paragraph, Widget},
 };
+
+static CELL_N: usize = 8;
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::default().run(terminal))
 }
 
 #[derive(Debug, Default)]
+pub struct Grid {
+    cells: Vec<usize>,
+}
+
+#[derive(Debug, Default)]
 pub struct App {
-    // player_name: string,
+    grid: Grid,
+    is_turn: usize,
+    cursor_cell: usize,
+    selected_cell: usize,
     exit: bool,
 }
 
@@ -41,8 +51,11 @@ impl App {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                 match key_event.code {
                     KeyCode::Char('q') => self.exit(),
-                    // KeyCode::Left => self.decrement_counter(),
-                    // KeyCode::Right => self.increment_counter(),
+                    KeyCode::Char('h') => self.left(),
+                    KeyCode::Char('j') => self.down(),
+                    KeyCode::Char('k') => self.up(),
+                    KeyCode::Char('l') => self.right(),
+                    KeyCode::Char(' ') => self.select(),
                     _ => {}
                 }
             }
@@ -51,17 +64,36 @@ impl App {
         Ok(())
     }
 
+    // fn coords_to_index(x: usize, y: usize) -> usize {
+    //     x * CELL_N + y
+    // }
+
     fn exit(&mut self) {
         self.exit = true;
     }
-
-    // fn increment_counter(&mut self) {
-    //     self.counter += 1;
-    // }
-
-    // fn decrement_counter(&mut self) {
-    //     self.counter -= 1;
-    // }
+    fn left(&mut self) {
+        if self.cursor_cell != 0 {
+            self.cursor_cell -= 1;
+        }
+    }
+    fn down(&mut self) {
+        if self.cursor_cell < CELL_N * (CELL_N - 1) {
+            self.cursor_cell += CELL_N;
+        }
+    }
+    fn up(&mut self) {
+        if self.cursor_cell >= CELL_N {
+            self.cursor_cell -= CELL_N;
+        }
+    }
+    fn right(&mut self) {
+        if self.cursor_cell != (CELL_N * CELL_N) - 1 {
+            self.cursor_cell += 1;
+        }
+    }
+    fn select(&mut self) {
+        self.selected_cell = self.cursor_cell;
+    }
 }
 
 impl Widget for &App {
@@ -96,11 +128,13 @@ impl Widget for &App {
         // board
         let cell_size = board_area.height / 8;
         let rows = Layout::vertical([Length(cell_size); 8])
+            // .spacing(-1)
             .flex(ratatui::layout::Flex::Start)
             .split(board_area);
 
         let cells = rows.iter().flat_map(|row| {
             Layout::horizontal([Length(cell_size * 2); 8])
+                // .spacing(-1)
                 .flex(ratatui::layout::Flex::Center)
                 .split(*row)
                 .iter()
@@ -109,10 +143,16 @@ impl Widget for &App {
                 .collect::<Vec<Rect>>()
         });
 
+        // probably there's a cleaner way
         for (i, cell) in cells.enumerate() {
-            Paragraph::new(format!("{:02}", i))
-                .block(Block::bordered())
-                .render(cell, buf);
+            let c = Paragraph::new(format!("{:02}", i)).block(Block::bordered());
+            if i == self.cursor_cell {
+                c.on_light_green().render(cell, buf);
+            } else if i == self.selected_cell {
+                c.on_yellow().render(cell, buf);
+            } else {
+                c.render(cell, buf);
+            }
         }
     }
 }
