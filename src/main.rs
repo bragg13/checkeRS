@@ -112,6 +112,10 @@ impl App {
         }
     }
     fn select(&mut self) {
+        if self.grid[self.cursor_cell] == 0 {
+            self.grid[self.cursor_cell] = self.player_id;
+            self.grid[self.selected_cell] = 0;
+        }
         self.selected_cell = self.cursor_cell;
     }
 }
