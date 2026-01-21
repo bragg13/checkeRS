@@ -1,16 +1,20 @@
-use std::{cell, io};
+use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
     layout::{
-        Constraint::{self, Fill, Length, Min, Percentage, Ratio},
+        Constraint::{self, Length},
         Layout, Margin, Rect,
     },
     style::{Color, Stylize},
-    text::{Line, Text},
-    widgets::{Block, Padding, Paragraph, Widget},
+    symbols::Marker,
+    text::Line,
+    widgets::{
+        Block, Paragraph, Widget,
+        canvas::{Canvas, Circle, Rectangle},
+    },
 };
 
 static CELL_N: usize = 8;
@@ -159,14 +163,28 @@ impl Widget for &App {
 
         // probably there's a cleaner way
         for (i, cell) in cells.enumerate() {
-            let c = Paragraph::new(format!("{:01}", self.grid[i])).block(Block::bordered());
-            if i == self.cursor_cell {
-                c.on_light_green().render(cell, buf);
-            } else if i == self.selected_cell {
-                c.on_yellow().render(cell, buf);
-            } else {
-                c.render(cell, buf);
-            }
+            Canvas::default()
+                .block(Block::bordered())
+                .marker(Marker::Braille)
+                .x_bounds([0.0, 10.0])
+                .y_bounds([0.0, 10.0])
+                .paint(|ctx| {
+                    ctx.draw(&Circle {
+                        x: 5.0,
+                        y: 5.0,
+                        color: Color::Red,
+                        radius: 5.0,
+                    });
+                })
+                .render(cell, buf);
+            // let c = Paragraph::new(format!("{:01}", self.grid[i])).block(Block::bordered());
+            // if i == self.cursor_cell {
+            //     c.on_light_green().render(cell, buf);
+            // } else if i == self.selected_cell {
+            //     c.on_yellow().render(cell, buf);
+            // } else {
+            //     c.render(cell, buf);
+            // }
         }
     }
 }
