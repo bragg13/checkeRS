@@ -92,10 +92,6 @@ impl App {
         Ok(())
     }
 
-    // fn coords_to_index(x: usize, y: usize) -> usize {
-    //     x * CELL_N + y
-    // }
-
     fn exit(&mut self) {
         self.exit = true;
     }
@@ -128,18 +124,58 @@ impl App {
         if self.grid[self.cursor_cell] == 0 && self.possible_moves.contains(&self.cursor_cell) {
             self.grid[self.cursor_cell] = self.player_id;
             self.grid[self.selected_cell] = 0;
+            self.possible_moves.clear();
             // if eating...
         }
         // selecting our own pawn
         if self.grid[self.cursor_cell] == self.player_id {
             self.selected_cell = self.cursor_cell;
             // update possible moves
-            self.possible_moves.clear();
+            self.possible_moves = get_possible_moves(
+                &self.grid,
+                self.selected_cell,
+                if self.player_id == 1 { 2 } else { 1 },
+            );
         }
     }
 }
+// HELPER FUNCTIONS to put into a separate crate probably
+fn index_to_coords(i: usize) -> (usize, usize) {
+    (i / CELL_N, i % CELL_N)
+}
+fn coords_to_index(x: usize, y: usize) -> usize {
+    x * CELL_N + y
+}
 pub fn is_white(i: usize) -> bool {
     (i / 8 + i % 8) % 2 == 0
+}
+pub fn next_diagonal_cell(i: usize) -> (usize, usize, usize, usize) {
+    let (x, y) = index_to_coords(i);
+    return (
+        coords_to_index(x + 1, y + 1),
+        coords_to_index(x + 1, y - 1),
+        coords_to_index(x - 1, y + 1),
+        coords_to_index(x - 1, y - 1),
+    );
+}
+pub fn is_free(grid: &[usize], i: usize) -> bool {
+    grid[i] == 0
+}
+pub fn get_possible_moves(grid: &[usize], i: usize, opponent: usize) -> Vec<usize> {
+    let mut v: Vec<usize> = vec![];
+    // can move diagonally forward
+    for next_cell in vec![i - CELL_N - 1, i - CELL_N + 1] {
+        match grid[next_cell] {
+            0 => v.push(next_cell), // move
+            opponent => {
+                // eating...
+                // if grid[next_cell - CELL_N - 1] == 0 {
+                //     v.push(next_cell - CELL_N - 1)
+                // }
+            }
+        };
+    }
+    v
 }
 
 impl Widget for &App {
