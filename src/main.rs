@@ -1,4 +1,4 @@
-use std::io;
+use std::{cell, io};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -18,7 +18,7 @@ use ratatui::{
 };
 
 static CELL_N: usize = 8;
-static PAWN_N: usize = 16;
+static PAWN_N: usize = 12;
 static BOARD_SIZE: usize = CELL_N * CELL_N;
 
 fn main() -> io::Result<()> {
@@ -31,6 +31,7 @@ pub struct App {
     is_turn: usize,
     cursor_cell: usize,
     selected_cell: usize,
+    possible_moves: Vec<usize>,
     player_id: usize,
     exit: bool,
 }
@@ -38,19 +39,24 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         let mut grid = vec![0; CELL_N * CELL_N];
-        for i in 0..PAWN_N {
-            grid[i] = 1;
+        for i in 0..CELL_N * 3 {
+            if is_white(i) {
+                grid[i] = 1;
+            }
         }
-        for j in (BOARD_SIZE - PAWN_N)..BOARD_SIZE {
-            grid[j] = 2;
+        for j in (BOARD_SIZE - CELL_N * 3)..BOARD_SIZE {
+            if is_white(j) {
+                grid[j] = 2;
+            }
         }
         Self {
             grid,
-            is_turn: 1,
+            is_turn: 2,
             cursor_cell: 0,
             selected_cell: 0,
             exit: false,
             player_id: 2,
+            possible_moves: vec![],
         }
     }
 
@@ -69,14 +75,16 @@ impl App {
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                match key_event.code {
-                    KeyCode::Char('q') => self.exit(),
-                    KeyCode::Char('h') => self.left(),
-                    KeyCode::Char('j') => self.down(),
-                    KeyCode::Char('k') => self.up(),
-                    KeyCode::Char('l') => self.right(),
-                    KeyCode::Char(' ') => self.select(),
-                    _ => {}
+                if self.is_turn == self.player_id {
+                    match key_event.code {
+                        KeyCode::Char('q') => self.exit(),
+                        KeyCode::Char('h') => self.left(),
+                        KeyCode::Char('j') => self.down(),
+                        KeyCode::Char('k') => self.up(),
+                        KeyCode::Char('l') => self.right(),
+                        KeyCode::Char(' ') => self.select(),
+                        _ => {}
+                    }
                 }
             }
             _ => {}
@@ -112,12 +120,26 @@ impl App {
         }
     }
     fn select(&mut self) {
-        if self.grid[self.cursor_cell] == 0 {
+        if !is_white(self.cursor_cell) {
+            return;
+        }
+
+        // selecting empty cell
+        if self.grid[self.cursor_cell] == 0 && self.possible_moves.contains(&self.cursor_cell) {
             self.grid[self.cursor_cell] = self.player_id;
             self.grid[self.selected_cell] = 0;
+            // if eating...
         }
-        self.selected_cell = self.cursor_cell;
+        // selecting our own pawn
+        if self.grid[self.cursor_cell] == self.player_id {
+            self.selected_cell = self.cursor_cell;
+            // update possible moves
+            self.possible_moves.clear();
+        }
     }
+}
+pub fn is_white(i: usize) -> bool {
+    (i / 8 + i % 8) % 2 == 0
 }
 
 impl Widget for &App {
@@ -178,17 +200,23 @@ impl Widget for &App {
                 },
                 radius: 5.0,
             };
+
             let cell_color = if i == self.cursor_cell {
                 Color::LightGreen
             } else if i == self.selected_cell {
                 Color::Yellow
             } else {
-                Color::Reset
+                if is_white(i) {
+                    Color::White
+                } else {
+                    Color::Black
+                }
             };
 
             Canvas::default()
-                .block(Block::bordered().bg(cell_color))
+                .block(Block::bordered().bg(cell_color).fg(cell_color))
                 .marker(Marker::Braille)
+                .background_color(cell_color)
                 .x_bounds([0.0, 10.0])
                 .y_bounds([0.0, 10.0])
                 .paint(|ctx| {
