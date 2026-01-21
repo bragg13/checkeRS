@@ -13,7 +13,7 @@ use ratatui::{
     text::Line,
     widgets::{
         Block, Paragraph, Widget,
-        canvas::{Canvas, Circle, Rectangle},
+        canvas::{Canvas, Circle},
     },
 };
 
@@ -31,6 +31,7 @@ pub struct App {
     is_turn: usize,
     cursor_cell: usize,
     selected_cell: usize,
+    player_id: usize,
     exit: bool,
 }
 
@@ -49,6 +50,7 @@ impl App {
             cursor_cell: 0,
             selected_cell: 0,
             exit: false,
+            player_id: 2,
         }
     }
 
@@ -127,7 +129,7 @@ impl Widget for &App {
         ])
         .centered();
 
-        let block = Block::bordered()
+        Block::bordered()
             .title(title)
             .title_bottom(instructions)
             .render(area, buf);
@@ -161,30 +163,36 @@ impl Widget for &App {
                 .collect::<Vec<Rect>>()
         });
 
-        // probably there's a cleaner way
         for (i, cell) in cells.enumerate() {
+            let c = &Circle {
+                x: 5.0,
+                y: 5.0,
+                color: if self.grid[i] == self.player_id {
+                    Color::Green // player
+                } else {
+                    Color::Red // opponent
+                },
+                radius: 5.0,
+            };
+            let cell_color = if i == self.cursor_cell {
+                Color::LightGreen
+            } else if i == self.selected_cell {
+                Color::Yellow
+            } else {
+                Color::Reset
+            };
+
             Canvas::default()
-                .block(Block::bordered())
+                .block(Block::bordered().bg(cell_color))
                 .marker(Marker::Braille)
                 .x_bounds([0.0, 10.0])
                 .y_bounds([0.0, 10.0])
                 .paint(|ctx| {
-                    ctx.draw(&Circle {
-                        x: 5.0,
-                        y: 5.0,
-                        color: Color::Red,
-                        radius: 5.0,
-                    });
+                    if self.grid[i] != 0 {
+                        ctx.draw(c);
+                    }
                 })
                 .render(cell, buf);
-            // let c = Paragraph::new(format!("{:01}", self.grid[i])).block(Block::bordered());
-            // if i == self.cursor_cell {
-            //     c.on_light_green().render(cell, buf);
-            // } else if i == self.selected_cell {
-            //     c.on_yellow().render(cell, buf);
-            // } else {
-            //     c.render(cell, buf);
-            // }
         }
     }
 }
