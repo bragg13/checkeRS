@@ -1,4 +1,7 @@
-use std::{cell, io};
+use std::{
+    io,
+    ops::{Index, IndexMut},
+};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -25,12 +28,78 @@ fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Copy)]
+enum PieceType {
+    Pawn,
+    King,
+}
+
+#[derive(Debug, Default, Copy, Clone, PartialEq)]
+pub struct Coords {
+    pub x: usize,
+    pub y: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Piece {
+    pub piece_type: PieceType,
+    pub player: usize,
+}
+impl Piece {
+    pub fn new(piece_type: PieceType, player: usize) -> Self {
+        Piece {
+            piece_type: piece_type,
+            player: player,
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct Board(Vec<Vec<Option<Piece>>>);
+impl Board {
+    pub fn new() -> Self {
+        let mut grid = vec![vec![None; CELL_N]; CELL_N];
+
+        for i in 0..CELL_N {
+            for j in 0..CELL_N {
+                let coords = Coords { x: i, y: j };
+                if i < 3 && is_white(coords) {
+                    grid[i][j] = Some(Piece {
+                        piece_type: PieceType::Pawn,
+                        player: 1,
+                    });
+                } else if i > 4 && is_white(coords) {
+                    grid[i][j] = Some(Piece {
+                        piece_type: PieceType::Pawn,
+                        player: 2,
+                    });
+                } else {
+                    grid[i][j] = None;
+                }
+            }
+        }
+
+        Board(grid)
+    }
+}
+impl Index<Coords> for Board {
+    type Output = Option<Piece>;
+
+    fn index(&self, index: Coords) -> &Self::Output {
+        &self.0[index.y][index.x]
+    }
+}
+impl IndexMut<Coords> for Board {
+    fn index_mut(&mut self, index: Coords) -> &mut Self::Output {
+        &mut self.0[index.y][index.x]
+    }
+}
+
+#[derive(Debug)]
 pub struct App {
-    grid: Vec<usize>,
+    grid: Board,
     is_turn: usize,
-    cursor_cell: usize,
-    selected_cell: usize,
+    cursor_cell: Coords,
+    selected_cell: Coords,
     possible_moves: Vec<usize>,
     player_id: usize,
     exit: bool,
@@ -38,22 +107,11 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let mut grid = vec![0; CELL_N * CELL_N];
-        for i in 0..CELL_N * 3 {
-            if is_white(i) {
-                grid[i] = 1;
-            }
-        }
-        for j in (BOARD_SIZE - CELL_N * 3)..BOARD_SIZE {
-            if is_white(j) {
-                grid[j] = 2;
-            }
-        }
         Self {
-            grid,
+            grid: Board::new(),
             is_turn: 2,
-            cursor_cell: 0,
-            selected_cell: 0,
+            cursor_cell: Coords { x: 0, y: 0 },
+            selected_cell: Coords { x: 0, y: 0 },
             exit: false,
             player_id: 2,
             possible_moves: vec![],
@@ -96,23 +154,23 @@ impl App {
         self.exit = true;
     }
     fn left(&mut self) {
-        if self.cursor_cell != 0 {
-            self.cursor_cell -= 1;
+        if self.cursor_cell.x != 0 {
+            self.cursor_cell.x -= 1;
         }
     }
     fn down(&mut self) {
-        if self.cursor_cell < CELL_N * (CELL_N - 1) {
-            self.cursor_cell += CELL_N;
+        if self.cursor_cell.y < CELL_N - 1 {
+            self.cursor_cell.y += 1;
         }
     }
     fn up(&mut self) {
-        if self.cursor_cell >= CELL_N {
-            self.cursor_cell -= CELL_N;
+        if self.cursor_cell.y > 0 {
+            self.cursor_cell.y -= 1;
         }
     }
     fn right(&mut self) {
-        if self.cursor_cell != (CELL_N * CELL_N) - 1 {
-            self.cursor_cell += 1;
+        if self.cursor_cell.x != CELL_N - 1 {
+            self.cursor_cell.x += 1;
         }
     }
     fn select(&mut self) {
@@ -121,21 +179,26 @@ impl App {
         }
 
         // selecting empty cell
-        if self.grid[self.cursor_cell] == 0 && self.possible_moves.contains(&self.cursor_cell) {
-            self.grid[self.cursor_cell] = self.player_id;
-            self.grid[self.selected_cell] = 0;
+        if self.grid[self.cursor_cell].is_none()
+        //&& self.possible_moves.contains(&self.cursor_cell)
+        {
+            self.grid[self.cursor_cell] = Some(Piece {
+                piece_type: PieceType::Pawn,
+                player: self.player_id,
+            });
+            self.grid[self.selected_cell] = None;
             self.possible_moves.clear();
             // if eating...
         }
         // selecting our own pawn
-        if self.grid[self.cursor_cell] == self.player_id {
+        if self.grid[self.cursor_cell].is_some_and(|x| x.player == self.player_id) {
             self.selected_cell = self.cursor_cell;
             // update possible moves
-            self.possible_moves = get_possible_moves(
-                &self.grid,
-                self.selected_cell,
-                if self.player_id == 1 { 2 } else { 1 },
-            );
+            // self.possible_moves = get_possible_moves(
+            //     &self.grid,
+            //     self.selected_cell,
+            //     if self.player_id == 1 { 2 } else { 1 },
+            // );
         }
     }
 }
@@ -143,20 +206,20 @@ impl App {
 fn index_to_coords(i: usize) -> (usize, usize) {
     (i / CELL_N, i % CELL_N)
 }
-fn coords_to_index(x: usize, y: usize) -> usize {
-    x * CELL_N + y
+fn coords_to_index(coords: Coords) -> usize {
+    coords.y * CELL_N + coords.x
 }
-pub fn is_white(i: usize) -> bool {
-    (i / 8 + i % 8) % 2 == 0
+pub fn is_white(coords: Coords) -> bool {
+    (coords.x + coords.y) % 2 == 0
 }
-pub fn next_diagonal_cell(i: usize) -> (usize, usize, usize, usize) {
-    let (x, y) = index_to_coords(i);
-    return (
-        coords_to_index(x + 1, y + 1),
-        coords_to_index(x + 1, y - 1),
-        coords_to_index(x - 1, y + 1),
-        coords_to_index(x - 1, y - 1),
-    );
+pub fn next_diagonal_cell(i: usize) {
+    // let (x, y) = index_to_coords(i);
+    // return (
+    //     coords_to_index(x + 1, y + 1),
+    //     coords_to_index(x + 1, y - 1),
+    //     coords_to_index(x - 1, y + 1),
+    //     coords_to_index(x - 1, y - 1),
+    // );
 }
 pub fn is_free(grid: &[usize], i: usize) -> bool {
     grid[i] == 0
@@ -167,12 +230,7 @@ pub fn get_possible_moves(grid: &[usize], i: usize, opponent: usize) -> Vec<usiz
     for next_cell in vec![i - CELL_N - 1, i - CELL_N + 1] {
         match grid[next_cell] {
             0 => v.push(next_cell), // move
-            opponent => {
-                // eating...
-                // if grid[next_cell - CELL_N - 1] == 0 {
-                //     v.push(next_cell - CELL_N - 1)
-                // }
-            }
+            opponent => {}
         };
     }
     v
@@ -214,53 +272,61 @@ impl Widget for &App {
             .flex(ratatui::layout::Flex::Start)
             .split(board_area);
 
-        let cells = rows.iter().flat_map(|row| {
-            Layout::horizontal([Length(cell_size * 2); 8])
-                // .spacing(-1)
-                .flex(ratatui::layout::Flex::Center)
-                .split(*row)
-                .iter()
-                .copied()
-                .take(8)
-                .collect::<Vec<Rect>>()
-        });
+        let cells = rows
+            .iter()
+            .flat_map(|row| {
+                Layout::horizontal([Length(cell_size * 2); 8])
+                    // .spacing(-1)
+                    .flex(ratatui::layout::Flex::Center)
+                    .split(*row)
+                    .iter()
+                    .copied()
+                    .take(8)
+                    .collect::<Vec<Rect>>()
+            })
+            .collect::<Vec<_>>();
 
-        for (i, cell) in cells.enumerate() {
-            let c = &Circle {
-                x: 5.0,
-                y: 5.0,
-                color: if self.grid[i] == self.player_id {
-                    Color::Green // player
+        for i in 0..CELL_N {
+            for j in 0..CELL_N {
+                let coords = Coords { x: i, y: j };
+                let c = &Circle {
+                    x: 5.0,
+                    y: 5.0,
+                    color: if self.grid[coords].is_some_and(|x| x.player == self.player_id) {
+                        Color::Green // player
+                    } else {
+                        Color::Red // opponent
+                    },
+                    radius: 5.0,
+                };
+
+                let cell_color = if coords == self.cursor_cell {
+                    Color::LightGreen
+                } else if coords == self.selected_cell {
+                    Color::Yellow
                 } else {
-                    Color::Red // opponent
-                },
-                radius: 5.0,
-            };
-
-            let cell_color = if i == self.cursor_cell {
-                Color::LightGreen
-            } else if i == self.selected_cell {
-                Color::Yellow
-            } else {
-                if is_white(i) {
-                    Color::White
-                } else {
-                    Color::Black
-                }
-            };
-
-            Canvas::default()
-                .block(Block::bordered().bg(cell_color).fg(cell_color))
-                .marker(Marker::Braille)
-                .background_color(cell_color)
-                .x_bounds([0.0, 10.0])
-                .y_bounds([0.0, 10.0])
-                .paint(|ctx| {
-                    if self.grid[i] != 0 {
-                        ctx.draw(c);
+                    if is_white(coords) {
+                        Color::White
+                    } else {
+                        Color::Black
                     }
-                })
-                .render(cell, buf);
+                };
+
+                Canvas::default()
+                    .block(
+                        Block::bordered().bg(cell_color).fg(cell_color), //.title(format!("{:?}-{:?}-{:?}", i, j, coords_to_index(coords))),
+                    )
+                    .marker(Marker::Braille)
+                    .background_color(cell_color)
+                    .x_bounds([0.0, 10.0])
+                    .y_bounds([0.0, 10.0])
+                    .paint(|ctx| {
+                        if self.grid[coords].is_some_and(|x| x.player != 0) {
+                            ctx.draw(c);
+                        }
+                    })
+                    .render(cells[coords_to_index(coords)], buf);
+            }
         }
     }
 }
