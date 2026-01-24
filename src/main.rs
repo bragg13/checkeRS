@@ -1,7 +1,4 @@
-use std::{
-    io,
-    ops::{Add, Index, IndexMut, Sub},
-};
+use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -20,135 +17,20 @@ use ratatui::{
     },
 };
 
+use crate::{
+    board::Board,
+    coords::Coords,
+    piece::{Piece, PieceType},
+};
+mod board;
+mod coords;
+mod piece;
+mod player;
+
 static CELL_N: usize = 8;
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum PieceType {
-    Pawn,
-    King,
-}
-
-#[derive(Debug, Default, Copy, Clone, PartialEq)]
-pub struct Coords {
-    pub x: usize,
-    pub y: usize,
-}
-impl Add for Coords {
-    type Output = Coords;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Coords {
-            x: self.x + rhs.x,
-            y: self.y + rhs.y,
-        }
-    }
-}
-impl Sub for Coords {
-    type Output = (i32, i32);
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        (
-            (self.x as i32 - rhs.x as i32),
-            (self.y as i32 - rhs.y as i32),
-        )
-    }
-}
-impl Coords {
-    // very verbose and not scalable, but for a simple game with only 4 diagonals it is fine.
-    // this lets me avoid many casting or using checked_sub as im working with usize and i32
-    // and arithmetic is annoying
-    pub fn diag(self) -> Vec<Coords> {
-        let mut v = Vec::new();
-
-        // Top-left
-        if self.x > 0 && self.y > 0 {
-            v.push(Coords {
-                x: self.x - 1,
-                y: self.y - 1,
-            });
-        }
-        // Top-right
-        if self.x < CELL_N - 1 && self.y > 0 {
-            v.push(Coords {
-                x: self.x + 1,
-                y: self.y - 1,
-            });
-        }
-        // Bottom-left
-        if self.x > 0 && self.y < CELL_N - 1 {
-            v.push(Coords {
-                x: self.x - 1,
-                y: self.y + 1,
-            });
-        }
-        // Bottom-right
-        if self.x < CELL_N - 1 && self.y < CELL_N - 1 {
-            v.push(Coords {
-                x: self.x + 1,
-                y: self.y + 1,
-            });
-        }
-
-        v
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Piece {
-    pub piece_type: PieceType,
-    pub player: usize,
-}
-impl Piece {
-    pub fn new(piece_type: PieceType, player: usize) -> Self {
-        Piece {
-            piece_type: piece_type,
-            player: player,
-        }
-    }
-}
-#[derive(Debug, Clone)]
-pub struct Board(Vec<Vec<Option<Piece>>>);
-impl Board {
-    pub fn new() -> Self {
-        let mut grid = vec![vec![None; CELL_N]; CELL_N];
-
-        for i in 0..CELL_N {
-            for j in 0..CELL_N {
-                let coords = Coords { x: i, y: j };
-                if i < 3 && is_white(coords) {
-                    grid[i][j] = Some(Piece {
-                        piece_type: PieceType::Pawn,
-                        player: 2,
-                    });
-                } else if i > 4 && is_white(coords) {
-                    grid[i][j] = Some(Piece {
-                        piece_type: PieceType::Pawn,
-                        player: 1,
-                    });
-                } else {
-                    grid[i][j] = None;
-                }
-            }
-        }
-
-        Board(grid)
-    }
-}
-impl Index<Coords> for Board {
-    type Output = Option<Piece>;
-
-    fn index(&self, index: Coords) -> &Self::Output {
-        &self.0[index.y][index.x]
-    }
-}
-impl IndexMut<Coords> for Board {
-    fn index_mut(&mut self, index: Coords) -> &mut Self::Output {
-        &mut self.0[index.y][index.x]
-    }
 }
 
 #[derive(Debug)]
@@ -270,7 +152,6 @@ pub fn is_white(coords: Coords) -> bool {
 }
 
 pub fn get_possible_moves(grid: &Board, cell: Coords, player: usize) -> Vec<Coords> {
-    // can move diagonally forward
     let mut empty = vec![];
     cell.diag()
         .into_iter()
