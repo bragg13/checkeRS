@@ -51,7 +51,10 @@ impl Sub for Coords {
     type Output = (i32, i32);
 
     fn sub(self, rhs: Self) -> Self::Output {
-        ((self.x - rhs.x) as i32, (self.y - rhs.y) as i32)
+        (
+            (self.x as i32 - rhs.x as i32),
+            (self.y as i32 - rhs.y as i32),
+        )
     }
 }
 impl Coords {
@@ -171,6 +174,9 @@ impl App {
             possible_moves: vec![],
         }
     }
+    fn next_turn(&mut self) {
+        self.is_turn = if self.is_turn == 1 { 2 } else { 1 };
+    }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
@@ -187,17 +193,17 @@ impl App {
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                if self.is_turn == self.player_id {
-                    match key_event.code {
-                        KeyCode::Char('q') => self.exit(),
-                        KeyCode::Char('h') => self.left(),
-                        KeyCode::Char('j') => self.down(),
-                        KeyCode::Char('k') => self.up(),
-                        KeyCode::Char('l') => self.right(),
-                        KeyCode::Char(' ') => self.select(),
-                        _ => {}
-                    }
+                // if self.is_turn == self.player_id {
+                match key_event.code {
+                    KeyCode::Char('q') => self.exit(),
+                    KeyCode::Char('h') => self.left(),
+                    KeyCode::Char('j') => self.down(),
+                    KeyCode::Char('k') => self.up(),
+                    KeyCode::Char('l') => self.right(),
+                    KeyCode::Char(' ') => self.select(),
+                    _ => {}
                 }
+                // }
             }
             _ => {}
         };
@@ -241,6 +247,7 @@ impl App {
                 player: self.player_id,
             });
             self.grid[self.selected_cell] = None;
+            self.next_turn();
             // if eating...
         }
         // selecting our own pawn
@@ -252,7 +259,7 @@ impl App {
     }
 }
 // HELPER FUNCTIONS to put into a separate crate probably
-fn index_to_coords(i: usize) -> (usize, usize) {
+fn _index_to_coords(i: usize) -> (usize, usize) {
     (i / CELL_N, i % CELL_N)
 }
 fn coords_to_index(coords: Coords) -> usize {
@@ -278,7 +285,7 @@ pub fn get_possible_moves(grid: &Board, cell: Coords, player: usize) -> Vec<Coor
             Some(next_cell) => {
                 if next_cell.player != player {
                     // maybe we can eat
-                    let direction = diag_coord - cell;
+                    let _direction = diag_coord - cell;
                     // if direction.
                 }
             }
@@ -305,13 +312,14 @@ impl Widget for &App {
             .render(area, buf);
 
         let vertical_layout =
-            Layout::vertical([Constraint::Percentage(5), Constraint::Percentage(95)]).spacing(1);
+            Layout::vertical([Constraint::Percentage(8), Constraint::Percentage(92)]).spacing(1);
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
 
         // info area
         Paragraph::new(vec![
-            Line::from(vec!["player: ".into(), "ciccio".green()]).left_aligned(),
-            Line::from(vec!["opponent: ".into(), "pollo".red()]).left_aligned(),
+            Line::from(vec!["player 1: ".into(), "ciccio".green()]).left_aligned(),
+            Line::from(vec!["player 2: ".into(), "pollo".red()]).left_aligned(),
+            Line::from(format!("player {:?} is playing", self.is_turn)).right_aligned(),
         ])
         .render(info_area, buf);
 
