@@ -1,6 +1,6 @@
 use std::{
     io,
-    ops::{Index, IndexMut},
+    ops::{Add, Index, IndexMut, Sub},
 };
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -21,15 +21,13 @@ use ratatui::{
 };
 
 static CELL_N: usize = 8;
-static PAWN_N: usize = 12;
-static BOARD_SIZE: usize = CELL_N * CELL_N;
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| App::new().run(terminal))
 }
 
 #[derive(Debug, Clone, Copy)]
-enum PieceType {
+pub enum PieceType {
     Pawn,
     King,
 }
@@ -38,6 +36,62 @@ enum PieceType {
 pub struct Coords {
     pub x: usize,
     pub y: usize,
+}
+impl Add for Coords {
+    type Output = Coords;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Coords {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+impl Sub for Coords {
+    type Output = (i32, i32);
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        ((self.x - rhs.x) as i32, (self.y - rhs.y) as i32)
+    }
+}
+impl Coords {
+    // very verbose and not scalable, but for a simple game with only 4 diagonals it is fine.
+    // this lets me avoid many casting or using checked_sub as im working with usize and i32
+    // and arithmetic is annoying
+    pub fn diag(self) -> Vec<Coords> {
+        let mut v = Vec::new();
+
+        // Top-left
+        if self.x > 0 && self.y > 0 {
+            v.push(Coords {
+                x: self.x - 1,
+                y: self.y - 1,
+            });
+        }
+        // Top-right
+        if self.x < CELL_N - 1 && self.y > 0 {
+            v.push(Coords {
+                x: self.x + 1,
+                y: self.y - 1,
+            });
+        }
+        // Bottom-left
+        if self.x > 0 && self.y < CELL_N - 1 {
+            v.push(Coords {
+                x: self.x - 1,
+                y: self.y + 1,
+            });
+        }
+        // Bottom-right
+        if self.x < CELL_N - 1 && self.y < CELL_N - 1 {
+            v.push(Coords {
+                x: self.x + 1,
+                y: self.y + 1,
+            });
+        }
+
+        v
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -65,12 +119,12 @@ impl Board {
                 if i < 3 && is_white(coords) {
                     grid[i][j] = Some(Piece {
                         piece_type: PieceType::Pawn,
-                        player: 1,
+                        player: 2,
                     });
                 } else if i > 4 && is_white(coords) {
                     grid[i][j] = Some(Piece {
                         piece_type: PieceType::Pawn,
-                        player: 2,
+                        player: 1,
                     });
                 } else {
                     grid[i][j] = None;
@@ -100,20 +154,20 @@ pub struct App {
     is_turn: usize,
     cursor_cell: Coords,
     selected_cell: Coords,
-    possible_moves: Vec<usize>,
     player_id: usize,
     exit: bool,
+    possible_moves: Vec<Coords>,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
             grid: Board::new(),
-            is_turn: 2,
+            is_turn: 1,
             cursor_cell: Coords { x: 0, y: 0 },
             selected_cell: Coords { x: 0, y: 0 },
             exit: false,
-            player_id: 2,
+            player_id: 1,
             possible_moves: vec![],
         }
     }
@@ -187,18 +241,13 @@ impl App {
                 player: self.player_id,
             });
             self.grid[self.selected_cell] = None;
-            self.possible_moves.clear();
             // if eating...
         }
         // selecting our own pawn
         if self.grid[self.cursor_cell].is_some_and(|x| x.player == self.player_id) {
             self.selected_cell = self.cursor_cell;
-            // update possible moves
-            // self.possible_moves = get_possible_moves(
-            //     &self.grid,
-            //     self.selected_cell,
-            //     if self.player_id == 1 { 2 } else { 1 },
-            // );
+            self.possible_moves =
+                get_possible_moves(&self.grid, self.selected_cell, self.player_id);
         }
     }
 }
@@ -212,28 +261,29 @@ fn coords_to_index(coords: Coords) -> usize {
 pub fn is_white(coords: Coords) -> bool {
     (coords.x + coords.y) % 2 == 0
 }
-pub fn next_diagonal_cell(i: usize) {
-    // let (x, y) = index_to_coords(i);
-    // return (
-    //     coords_to_index(x + 1, y + 1),
-    //     coords_to_index(x + 1, y - 1),
-    //     coords_to_index(x - 1, y + 1),
-    //     coords_to_index(x - 1, y - 1),
-    // );
-}
-pub fn is_free(grid: &[usize], i: usize) -> bool {
-    grid[i] == 0
-}
-pub fn get_possible_moves(grid: &[usize], i: usize, opponent: usize) -> Vec<usize> {
-    let mut v: Vec<usize> = vec![];
+
+pub fn get_possible_moves(grid: &Board, cell: Coords, player: usize) -> Vec<Coords> {
     // can move diagonally forward
-    for next_cell in vec![i - CELL_N - 1, i - CELL_N + 1] {
-        match grid[next_cell] {
-            0 => v.push(next_cell), // move
-            opponent => {}
-        };
-    }
-    v
+    let mut empty = vec![];
+    cell.diag()
+        .into_iter()
+        .for_each(|diag_coord| match grid[diag_coord] {
+            None => {
+                // if empty cell and above us, we can move
+                // TODO: take into account player side
+                if diag_coord.y < cell.y {
+                    empty.push(diag_coord);
+                }
+            }
+            Some(next_cell) => {
+                if next_cell.player != player {
+                    // maybe we can eat
+                    let direction = diag_coord - cell;
+                    // if direction.
+                }
+            }
+        });
+    empty
 }
 
 impl Widget for &App {
@@ -304,6 +354,8 @@ impl Widget for &App {
                     Color::LightGreen
                 } else if coords == self.selected_cell {
                     Color::Yellow
+                } else if self.possible_moves.contains(&coords) {
+                    Color::LightYellow
                 } else {
                     if is_white(coords) {
                         Color::White
