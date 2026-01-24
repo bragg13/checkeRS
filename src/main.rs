@@ -20,18 +20,16 @@ use ratatui::{
 use crate::{
     board::Board,
     coords::Coords,
+    game_utils::{coords_to_index, get_possible_moves, is_white},
     piece::{Piece, PieceType},
 };
 mod board;
 mod coords;
+mod game_utils;
 mod piece;
 mod player;
 
 static CELL_N: usize = 8;
-
-fn main() -> io::Result<()> {
-    ratatui::run(|terminal| App::new().run(terminal))
-}
 
 #[derive(Debug)]
 pub struct App {
@@ -140,39 +138,6 @@ impl App {
         }
     }
 }
-// HELPER FUNCTIONS to put into a separate crate probably
-fn _index_to_coords(i: usize) -> (usize, usize) {
-    (i / CELL_N, i % CELL_N)
-}
-fn coords_to_index(coords: Coords) -> usize {
-    coords.y * CELL_N + coords.x
-}
-pub fn is_white(coords: Coords) -> bool {
-    (coords.x + coords.y) % 2 == 0
-}
-
-pub fn get_possible_moves(grid: &Board, cell: Coords, player: usize) -> Vec<Coords> {
-    let mut empty = vec![];
-    cell.diag()
-        .into_iter()
-        .for_each(|diag_coord| match grid[diag_coord] {
-            None => {
-                // if empty cell and above us, we can move
-                // TODO: take into account player side
-                if diag_coord.y < cell.y {
-                    empty.push(diag_coord);
-                }
-            }
-            Some(next_cell) => {
-                if next_cell.player != player {
-                    // maybe we can eat
-                    let _direction = diag_coord - cell;
-                    // if direction.
-                }
-            }
-        });
-    empty
-}
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -207,7 +172,6 @@ impl Widget for &App {
         // board
         let cell_size = board_area.height / 8;
         let rows = Layout::vertical([Length(cell_size); 8])
-            // .spacing(-1)
             .flex(ratatui::layout::Flex::Start)
             .split(board_area);
 
@@ -215,7 +179,6 @@ impl Widget for &App {
             .iter()
             .flat_map(|row| {
                 Layout::horizontal([Length(cell_size * 2); 8])
-                    // .spacing(-1)
                     .flex(ratatui::layout::Flex::Center)
                     .split(*row)
                     .iter()
@@ -270,4 +233,8 @@ impl Widget for &App {
             }
         }
     }
+}
+
+fn main() -> io::Result<()> {
+    ratatui::run(|terminal| App::new().run(terminal))
 }

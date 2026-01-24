@@ -3,7 +3,7 @@ use std::ops::{Index, IndexMut};
 use crate::{
     CELL_N,
     coords::Coords,
-    is_white,
+    game_utils::is_white,
     piece::{Piece, PieceType},
 };
 
