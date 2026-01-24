@@ -175,7 +175,7 @@ impl App {
         }
     }
     fn next_turn(&mut self) {
-        self.is_turn = if self.is_turn == 1 { 2 } else { 1 };
+        // random move from opponent
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -239,8 +239,7 @@ impl App {
         }
 
         // selecting empty cell
-        if self.grid[self.cursor_cell].is_none()
-        //&& self.possible_moves.contains(&self.cursor_cell)
+        if self.grid[self.cursor_cell].is_none() && self.possible_moves.contains(&self.cursor_cell)
         {
             self.grid[self.cursor_cell] = Some(Piece {
                 piece_type: PieceType::Pawn,
@@ -251,7 +250,8 @@ impl App {
             // if eating...
         }
         // selecting our own pawn
-        if self.grid[self.cursor_cell].is_some_and(|x| x.player == self.player_id) {
+        if self.grid[self.cursor_cell].is_some() {
+            //_and(|x| x.player == self.player_id) {
             self.selected_cell = self.cursor_cell;
             self.possible_moves =
                 get_possible_moves(&self.grid, self.selected_cell, self.player_id);
