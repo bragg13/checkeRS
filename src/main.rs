@@ -22,6 +22,7 @@ use crate::{
     coords::Coords,
     game_utils::{coords_to_index, get_possible_moves, is_white},
     piece::{Piece, PieceType},
+    player::Player,
 };
 mod board;
 mod coords;
@@ -37,7 +38,7 @@ pub struct App {
     is_turn: usize,
     cursor_cell: Coords,
     selected_cell: Coords,
-    player_id: usize,
+    player: Player,
     exit: bool,
     possible_moves: Vec<Coords>,
 }
@@ -50,12 +51,16 @@ impl App {
             cursor_cell: Coords { x: 0, y: 0 },
             selected_cell: Coords { x: 0, y: 0 },
             exit: false,
-            player_id: 1,
+            player: Player {
+                id: 1,
+                direction: 1,
+            },
             possible_moves: vec![],
         }
     }
     fn next_turn(&mut self) {
-        // random move from opponent
+        self.player.id = if self.is_turn == 1 { 2 } else { 1 };
+        self.player.direction = if self.is_turn == 1 { -1 } else { 1 };
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -123,7 +128,7 @@ impl App {
         {
             self.grid[self.cursor_cell] = Some(Piece {
                 piece_type: PieceType::Pawn,
-                player: self.player_id,
+                player_id: self.player.id,
             });
             self.grid[self.selected_cell] = None;
             self.next_turn();
@@ -133,8 +138,7 @@ impl App {
         if self.grid[self.cursor_cell].is_some() {
             //_and(|x| x.player == self.player_id) {
             self.selected_cell = self.cursor_cell;
-            self.possible_moves =
-                get_possible_moves(&self.grid, self.selected_cell, self.player_id);
+            self.possible_moves = get_possible_moves(&self.grid, self.selected_cell, self.player);
         }
     }
 }
@@ -194,7 +198,7 @@ impl Widget for &App {
                 let c = &Circle {
                     x: 5.0,
                     y: 5.0,
-                    color: if self.grid[coords].is_some_and(|x| x.player == self.player_id) {
+                    color: if self.grid[coords].is_some_and(|x| x.player_id == self.player.id) {
                         Color::Green // player
                     } else {
                         Color::Red // opponent
@@ -225,7 +229,7 @@ impl Widget for &App {
                     .x_bounds([0.0, 10.0])
                     .y_bounds([0.0, 10.0])
                     .paint(|ctx| {
-                        if self.grid[coords].is_some_and(|x| x.player != 0) {
+                        if self.grid[coords].is_some_and(|x| x.player_id > 0) {
                             ctx.draw(c);
                         }
                     })
@@ -236,5 +240,6 @@ impl Widget for &App {
 }
 
 fn main() -> io::Result<()> {
+    cli_log::init_cli_log!();
     ratatui::run(|terminal| App::new().run(terminal))
 }

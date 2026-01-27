@@ -7,13 +7,13 @@ pub enum PieceType {
 #[derive(Debug, Clone, Copy)]
 pub struct Piece {
     pub piece_type: PieceType,
-    pub player: usize,
+    pub player_id: u64,
 }
 impl Piece {
-    pub fn new(piece_type: PieceType, player: usize) -> Self {
+    pub fn new(piece_type: PieceType, player: u64) -> Self {
         Piece {
             piece_type: piece_type,
-            player: player,
+            player_id: player,
         }
     }
 }

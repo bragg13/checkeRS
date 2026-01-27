@@ -19,12 +19,12 @@ impl Board {
                 if i < 3 && is_white(coords) {
                     grid[i][j] = Some(Piece {
                         piece_type: PieceType::Pawn,
-                        player: 2,
+                        player_id: 2,
                     });
                 } else if i > 4 && is_white(coords) {
                     grid[i][j] = Some(Piece {
                         piece_type: PieceType::Pawn,
-                        player: 1,
+                        player_id: 1,
                     });
                 } else {
                     grid[i][j] = None;

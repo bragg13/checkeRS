@@ -1,5 +1,5 @@
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Player {
-    id: u64,
-    direction: i32,
+    pub id: u64,
+    pub direction: i32,
 }
