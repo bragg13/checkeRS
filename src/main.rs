@@ -154,11 +154,12 @@ impl App {
         // selecting our own pawn
         if self.grid[self.cursor_cell].is_some_and(|x| x.player_id == self.is_turn) {
             self.selected_cell = Some(self.cursor_cell);
-            self.possible_moves = get_possible_moves(
+            let (empty_cells, landing_ate_cells) = get_possible_moves(
                 &self.grid,
                 self.selected_cell.unwrap(),
                 self.players.get(&self.is_turn).unwrap(),
             );
+            // self.possible_moves = empty_cells.append(landing_ate_cells);
         }
     }
 }
