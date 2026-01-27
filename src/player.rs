@@ -1,5 +1,8 @@
-#[derive(Debug, Clone, Copy, PartialEq)]
+pub type PlayerId = u64;
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Player {
-    pub id: u64,
+    pub id: PlayerId,
+    pub name: String,
     pub direction: i32,
 }

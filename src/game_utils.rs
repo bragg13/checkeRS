@@ -1,5 +1,3 @@
-use cli_log::debug;
-
 use crate::{CELL_N, board::Board, coords::Coords, player::Player};
 
 fn _index_to_coords(i: usize) -> (usize, usize) {
@@ -12,7 +10,7 @@ pub fn is_white(coords: Coords) -> bool {
     (coords.x + coords.y) % 2 == 0
 }
 
-pub fn get_possible_moves(grid: &Board, cell: Coords, player: Player) -> Vec<Coords> {
+pub fn get_possible_moves(grid: &Board, cell: Coords, player: &Player) -> Vec<Coords> {
     let mut empty = vec![];
     cell.diag()
         .into_iter()

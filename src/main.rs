@@ -1,4 +1,4 @@
-use std::io;
+use std::{collections::HashMap, io};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -22,7 +22,7 @@ use crate::{
     coords::Coords,
     game_utils::{coords_to_index, get_possible_moves, is_white},
     piece::{Piece, PieceType},
-    player::Player,
+    player::{Player, PlayerId},
 };
 mod board;
 mod coords;
@@ -35,32 +35,45 @@ static CELL_N: usize = 8;
 #[derive(Debug)]
 pub struct App {
     grid: Board,
-    is_turn: usize,
+    is_turn: PlayerId,
     cursor_cell: Coords,
-    selected_cell: Coords,
-    player: Player,
+    selected_cell: Option<Coords>,
+    players: HashMap<PlayerId, Player>,
     exit: bool,
     possible_moves: Vec<Coords>,
 }
 
 impl App {
     pub fn new() -> Self {
+        let mut players = HashMap::new();
+        players.insert(
+            1 as PlayerId,
+            Player {
+                direction: 1,
+                id: 1 as PlayerId,
+                name: "Kasparov".to_string(),
+            },
+        );
+        players.insert(
+            2 as PlayerId,
+            Player {
+                direction: -1,
+                id: 2 as PlayerId,
+                name: "Magnussen".to_string(),
+            },
+        );
         Self {
             grid: Board::new(),
             is_turn: 1,
             cursor_cell: Coords { x: 0, y: 0 },
-            selected_cell: Coords { x: 0, y: 0 },
+            selected_cell: None,
             exit: false,
-            player: Player {
-                id: 1,
-                direction: 1,
-            },
+            players: players,
             possible_moves: vec![],
         }
     }
     fn next_turn(&mut self) {
-        self.player.id = if self.is_turn == 1 { 2 } else { 1 };
-        self.player.direction = if self.is_turn == 1 { -1 } else { 1 };
+        self.is_turn = if self.is_turn == 1 { 2 } else { 1 };
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -128,17 +141,24 @@ impl App {
         {
             self.grid[self.cursor_cell] = Some(Piece {
                 piece_type: PieceType::Pawn,
-                player_id: self.player.id,
+                player_id: self.is_turn,
             });
-            self.grid[self.selected_cell] = None;
+            if let Some(selected_cell) = self.selected_cell {
+                self.grid[selected_cell] = None;
+            }
+            self.possible_moves.clear();
+            self.selected_cell = None;
             self.next_turn();
             // if eating...
         }
         // selecting our own pawn
-        if self.grid[self.cursor_cell].is_some() {
-            //_and(|x| x.player == self.player_id) {
-            self.selected_cell = self.cursor_cell;
-            self.possible_moves = get_possible_moves(&self.grid, self.selected_cell, self.player);
+        if self.grid[self.cursor_cell].is_some_and(|x| x.player_id == self.is_turn) {
+            self.selected_cell = Some(self.cursor_cell);
+            self.possible_moves = get_possible_moves(
+                &self.grid,
+                self.selected_cell.unwrap(),
+                self.players.get(&self.is_turn).unwrap(),
+            );
         }
     }
 }
@@ -167,8 +187,16 @@ impl Widget for &App {
 
         // info area
         Paragraph::new(vec![
-            Line::from(vec!["player 1: ".into(), "ciccio".green()]).left_aligned(),
-            Line::from(vec!["player 2: ".into(), "pollo".red()]).left_aligned(),
+            Line::from(vec![
+                "player 1: ".into(),
+                format!("{:?}", self.players.get(&(1 as PlayerId)).unwrap().name).green(),
+            ])
+            .left_aligned(),
+            Line::from(vec![
+                "player 2: ".into(),
+                format!("{:?}", self.players.get(&(2 as PlayerId)).unwrap().name).red(),
+            ])
+            .left_aligned(),
             Line::from(format!("player {:?} is playing", self.is_turn)).right_aligned(),
         ])
         .render(info_area, buf);
@@ -198,7 +226,7 @@ impl Widget for &App {
                 let c = &Circle {
                     x: 5.0,
                     y: 5.0,
-                    color: if self.grid[coords].is_some_and(|x| x.player_id == self.player.id) {
+                    color: if self.grid[coords].is_some_and(|x| x.player_id == self.is_turn) {
                         Color::Green // player
                     } else {
                         Color::Red // opponent
@@ -208,7 +236,9 @@ impl Widget for &App {
 
                 let cell_color = if coords == self.cursor_cell {
                     Color::LightGreen
-                } else if coords == self.selected_cell {
+                } else if let Some(selected_cell) = self.selected_cell
+                    && coords == selected_cell
+                {
                     Color::Yellow
                 } else if self.possible_moves.contains(&coords) {
                     Color::LightYellow
