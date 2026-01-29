@@ -213,20 +213,16 @@ impl Widget for &App {
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
 
         // info area
-        Paragraph::new(vec![
-            Line::from(vec![
-                "player 1: ".into(),
-                format!("{:?}", self.players.get(&(1 as PlayerId)).unwrap().name).green(),
+        if let Some(player1) = self.players.get(&(1 as PlayerId))
+            && let Some(player2) = self.players.get(&(2 as PlayerId))
+        {
+            Paragraph::new(vec![
+                player1.pretty_print_scoreboard().left_aligned(),
+                player2.pretty_print_scoreboard().left_aligned(),
+                Line::from(format!("player {:?} is playing", self.is_turn)).right_aligned(),
             ])
-            .left_aligned(),
-            Line::from(vec![
-                "player 2: ".into(),
-                format!("{:?}", self.players.get(&(2 as PlayerId)).unwrap().name).red(),
-            ])
-            .left_aligned(),
-            Line::from(format!("player {:?} is playing", self.is_turn)).right_aligned(),
-        ])
-        .render(info_area, buf);
+            .render(info_area, buf);
+        };
 
         // board
         let cell_size = board_area.height / 8;
