@@ -1,5 +1,19 @@
 use crate::{CELL_N, board::Board, coords::Coords, player::Player};
 
+#[derive(Debug, PartialEq)]
+pub enum Move {
+    Simple(Coords),
+    Capture { to: Coords, eat: Coords },
+}
+impl Move {
+    pub fn destination(&self) -> Coords {
+        match self {
+            Move::Capture { to, .. } => *to,
+            Move::Simple(to) => *to,
+        }
+    }
+}
+
 fn _index_to_coords(i: usize) -> (usize, usize) {
     (i / CELL_N, i % CELL_N)
 }
@@ -10,81 +24,72 @@ pub fn is_white(coords: Coords) -> bool {
     (coords.x + coords.y) % 2 == 0
 }
 
-pub fn get_possible_moves(
-    grid: &Board,
-    cell: Coords,
-    player: &Player,
-) -> (Vec<Coords>, Vec<Coords>) {
-    let mut empty = vec![];
-    let mut edible = vec![];
-    // let offset_y = if player.direction == 1 { -1 } else { 1 };
-    cell.diag()
+pub fn get_possible_moves(grid: &Board, original_cell: Coords, player: &Player) -> Vec<Move> {
+    let mut moves = vec![];
+
+    // check edible moves
+    original_cell
+        .diag() // this gets consumed?
         .into_iter()
-        .for_each(|diag_coord| match grid[diag_coord] {
-            None => {
-                if player.direction == 1 {
-                    // moves toward up (+1)
-                    if diag_coord.y < cell.y {
-                        empty.push(diag_coord);
-                    }
-                } else {
-                    // move towards down (-1)
-                    if diag_coord.y > cell.y {
-                        empty.push(diag_coord);
-                    }
+        .filter(|cell| grid[*cell].is_some_and(|c| c.player_id != player.id))
+        .for_each(|edible_coords| {
+            // let offset_y = edible_coords.y - original_cell.y;
+            // let offset_x = edible_coords.x - original_cell.x;
+            let mut landing_coords = edible_coords;
+
+            if player.direction == 1 {
+                // look towards up (+1)
+                if edible_coords.x > original_cell.x {
+                    // this diagonal original_cell is on the right
+                    landing_coords.x += 1;
+                    landing_coords.y -= 1;
+                } else if edible_coords.x < original_cell.x {
+                    // this diagonal original_cell is on the LEFT
+                    landing_coords.x -= 1;
+                    landing_coords.y -= 1;
+                }
+            } else {
+                // move towards down (-1)
+                if edible_coords.x > original_cell.x {
+                    // this diagonal original_cell is on the right
+                    landing_coords.x += 1;
+                    landing_coords.y += 1;
+                } else if edible_coords.x < original_cell.x {
+                    // this diagonal original_cell is on the LEFT
+                    landing_coords.x -= 1;
+                    landing_coords.y += 1;
                 }
             }
-            Some(next_cell) => {
-                if next_cell.player_id != player.id {
-                    if player.direction == 1 {
-                        // look towards up (+1)
-                        if diag_coord.x > cell.x {
-                            // this diagonal cell is on the right
-                            let landing_coords = Coords {
-                                x: diag_coord.x + 1,
-                                y: diag_coord.y - 1,
-                            };
-                            match grid[landing_coords] {
-                                Some(_) => {}
-                                None => edible.push(landing_coords),
-                            }
-                        } else if diag_coord.x < cell.x {
-                            // this diagonal cell is on the LEFT
-                            let landing_coords = Coords {
-                                x: diag_coord.x - 1,
-                                y: diag_coord.y - 1,
-                            };
-                            match grid[landing_coords] {
-                                Some(_) => {}
-                                None => edible.push(landing_coords),
-                            }
-                        }
-                    } else {
-                        // move towards down (-1)
-                        if diag_coord.x > cell.x {
-                            // this diagonal cell is on the right
-                            let landing_coords = Coords {
-                                x: diag_coord.x + 1,
-                                y: diag_coord.y + 1,
-                            };
-                            match grid[landing_coords] {
-                                Some(_) => {}
-                                None => edible.push(landing_coords),
-                            }
-                        } else if diag_coord.x < cell.x {
-                            // this diagonal cell is on the LEFT
-                            let landing_coords = Coords {
-                                x: diag_coord.x - 1,
-                                y: diag_coord.y + 1,
-                            };
-                            match grid[landing_coords] {
-                                Some(_) => {}
-                                None => edible.push(landing_coords),
-                            }
-                        }
-                    }
+            match grid[landing_coords] {
+                Some(_) => {}
+                None => moves.push(Move::Capture {
+                    to: landing_coords,
+                    eat: edible_coords,
+                }),
+            }
+        });
+
+    // rule: forced to capture if can capture
+    if !moves.is_empty() {
+        return moves;
+    }
+
+    original_cell
+        .diag() // this gets consumed?
+        .into_iter()
+        .filter(|cell| grid[*cell].is_none())
+        .for_each(|empty_coords| {
+            if player.direction == 1 {
+                // moves toward up (+1)
+                if empty_coords.y < original_cell.y {
+                    moves.push(Move::Simple(empty_coords));
+                }
+            } else {
+                // move towards down (-1)
+                if empty_coords.y > original_cell.y {
+                    moves.push(Move::Simple(empty_coords));
                 }
             }
         });
-    (empty, edible)
+    moves
 }

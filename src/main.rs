@@ -20,7 +20,7 @@ use ratatui::{
 use crate::{
     board::Board,
     coords::Coords,
-    game_utils::{coords_to_index, get_possible_moves, is_white},
+    game_utils::{Move, coords_to_index, get_possible_moves, is_white},
     piece::{Piece, PieceType},
     player::{Player, PlayerId},
 };
@@ -40,7 +40,7 @@ pub struct App {
     selected_cell: Option<Coords>,
     players: HashMap<PlayerId, Player>,
     exit: bool,
-    possible_moves: Vec<Coords>,
+    possible_moves: Vec<Move>,
 }
 
 impl App {
@@ -52,6 +52,7 @@ impl App {
                 direction: 1,
                 id: 1 as PlayerId,
                 name: "Kasparov".to_string(),
+                score: 0,
             },
         );
         players.insert(
@@ -60,6 +61,7 @@ impl App {
                 direction: -1,
                 id: 2 as PlayerId,
                 name: "Magnussen".to_string(),
+                score: 0,
             },
         );
         Self {
@@ -137,29 +139,53 @@ impl App {
         }
 
         // selecting empty cell
-        if self.grid[self.cursor_cell].is_none() && self.possible_moves.contains(&self.cursor_cell)
-        {
-            self.grid[self.cursor_cell] = Some(Piece {
-                piece_type: PieceType::Pawn,
-                player_id: self.is_turn,
-            });
-            if let Some(selected_cell) = self.selected_cell {
-                self.grid[selected_cell] = None;
+        if self.grid[self.cursor_cell].is_none() {
+            let selected_move = self
+                .possible_moves
+                .iter()
+                .find(|possible_move| possible_move.destination() == self.cursor_cell);
+            match selected_move {
+                Some(mv) => {
+                    // move selected pawn to selected cell
+                    self.grid[self.cursor_cell] = Some(Piece {
+                        piece_type: PieceType::Pawn,
+                        player_id: self.is_turn,
+                    });
+
+                    // remove selected pawn from prev cell
+                    if let Some(prev_cell) = self.selected_cell {
+                        self.grid[prev_cell] = None;
+                    }
+
+                    // eat if thats the case
+                    match mv {
+                        Move::Simple(..) => {}
+                        Move::Capture { eat, .. } => {
+                            self.grid[*eat] = None;
+                            if let Some(player) = self.players.get_mut(&self.is_turn) {
+                                player.score += 1;
+                            }
+                        }
+                    }
+                    //
+                    // cleanup
+                    self.possible_moves.clear();
+                    self.selected_cell = None;
+                    self.next_turn();
+                }
+                None => {}
             }
-            self.possible_moves.clear();
-            self.selected_cell = None;
-            self.next_turn();
-            // if eating...
         }
+
         // selecting our own pawn
         if self.grid[self.cursor_cell].is_some_and(|x| x.player_id == self.is_turn) {
             self.selected_cell = Some(self.cursor_cell);
-            let (empty_cells, landing_ate_cells) = get_possible_moves(
+            let moves = get_possible_moves(
                 &self.grid,
                 self.selected_cell.unwrap(),
                 self.players.get(&self.is_turn).unwrap(),
             );
-            // self.possible_moves = empty_cells.append(landing_ate_cells);
+            self.possible_moves = moves;
         }
     }
 }
@@ -241,7 +267,13 @@ impl Widget for &App {
                     && coords == selected_cell
                 {
                     Color::Yellow
-                } else if self.possible_moves.contains(&coords) {
+                } else if self
+                    .possible_moves
+                    .iter()
+                    .map(|cell| cell.destination())
+                    .collect::<Vec<_>>()
+                    .contains(&coords)
+                {
                     Color::LightYellow
                 } else {
                     if is_white(coords) {
