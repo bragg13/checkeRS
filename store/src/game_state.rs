@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use crate::{
     board::Board,
-    coords::Coords,
     game_utils::Move,
     piece::{Piece, PieceType},
     player::{Player, PlayerId},

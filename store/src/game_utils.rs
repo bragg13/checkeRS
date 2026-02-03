@@ -76,6 +76,7 @@ pub fn get_possible_moves(grid: &Board, original_cell: Coords, player: &Player) 
             match grid[landing_coords] {
                 Some(_) => {}
                 None => moves.push(Move::Capture {
+                    from: original_cell,
                     to: landing_coords,
                     eat: edible_coords,
                 }),
@@ -95,12 +96,18 @@ pub fn get_possible_moves(grid: &Board, original_cell: Coords, player: &Player) 
             if player.direction == 1 {
                 // moves toward up (+1)
                 if empty_coords.y < original_cell.y {
-                    moves.push(Move::Simple(empty_coords));
+                    moves.push(Move::Simple {
+                        from: original_cell,
+                        to: empty_coords,
+                    });
                 }
             } else {
                 // move towards down (-1)
                 if empty_coords.y > original_cell.y {
-                    moves.push(Move::Simple(empty_coords));
+                    moves.push(Move::Simple {
+                        from: original_cell,
+                        to: empty_coords,
+                    });
                 }
             }
         });

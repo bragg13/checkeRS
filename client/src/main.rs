@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io};
+use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -16,22 +16,13 @@ use ratatui::{
         canvas::{Canvas, Circle},
     },
 };
-
-use crate::{
+use store::{
+    CELL_N,
     coords::Coords,
     game_state::{GameEvent, GameState},
     game_utils::{Move, coords_to_index, get_possible_moves, is_white},
-    piece::{Piece, PieceType},
     player::PlayerId,
 };
-mod board;
-mod coords;
-mod game_state;
-mod game_utils;
-mod piece;
-mod player;
-
-static CELL_N: usize = 8;
 
 #[derive(Debug)]
 pub struct App {
@@ -116,7 +107,7 @@ impl App {
         }
 
         // selecting empty cell
-        if self.grid[self.cursor_cell].is_none() {
+        if self.game_state.grid[self.cursor_cell].is_none() {
             let selected_move = self
                 .possible_moves
                 .iter()
@@ -137,12 +128,12 @@ impl App {
         }
 
         // selecting our own pawn
-        if self.grid[self.cursor_cell].is_some_and(|x| x.player_id == self.is_turn) {
+        if self.game_state.grid[self.cursor_cell].is_some_and(|x| x.player_id == self.player_id) {
             self.selected_cell = Some(self.cursor_cell);
             let moves = get_possible_moves(
-                &self.grid,
+                &self.game_state.grid,
                 self.selected_cell.unwrap(),
-                self.players.get(&self.is_turn).unwrap(),
+                self.game_state.players.get(&self.player_id).unwrap(), // TODO - BREAKS
             );
             self.possible_moves = moves;
         }
@@ -171,14 +162,13 @@ impl Widget for &App {
             Layout::vertical([Constraint::Percentage(8), Constraint::Percentage(92)]).spacing(1);
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
 
-        // info area
-        if let Some(player1) = self.players.get(&(1 as PlayerId))
-            && let Some(player2) = self.players.get(&(2 as PlayerId))
+        // info area // TODO
+        if let Some(player1) = self.game_state.players.get(&(1 as PlayerId))
+            && let Some(player2) = self.game_state.players.get(&(2 as PlayerId))
         {
             Paragraph::new(vec![
                 player1.pretty_print_scoreboard().left_aligned(),
                 player2.pretty_print_scoreboard().left_aligned(),
-                Line::from(format!("player {:?} is playing", self.is_turn)).right_aligned(),
             ])
             .render(info_area, buf);
         };
@@ -208,7 +198,10 @@ impl Widget for &App {
                 let c = &Circle {
                     x: 5.0,
                     y: 5.0,
-                    color: if self.grid[coords].is_some_and(|x| x.player_id == self.is_turn) {
+                    color: if self.game_state.grid[coords]
+                        .is_some_and(|x| x.player_id == self.player_id)
+                    // TODO?
+                    {
                         Color::Green // player
                     } else {
                         Color::Red // opponent
@@ -247,7 +240,7 @@ impl Widget for &App {
                     .x_bounds([0.0, 10.0])
                     .y_bounds([0.0, 10.0])
                     .paint(|ctx| {
-                        if self.grid[coords].is_some_and(|x| x.player_id > 0) {
+                        if self.game_state.grid[coords].is_some_and(|x| x.player_id > 0) {
                             ctx.draw(c);
                         }
                     })
