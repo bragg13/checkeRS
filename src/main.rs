@@ -20,6 +20,7 @@ use ratatui::{
 use crate::{
     board::Board,
     coords::Coords,
+    game_state::GameState,
     game_utils::{Move, coords_to_index, get_possible_moves, is_white},
     piece::{Piece, PieceType},
     player::{Player, PlayerId},
@@ -37,38 +38,18 @@ static CELL_N: usize = 8;
 pub struct App {
     possible_moves: Vec<Move>,
     cursor_cell: Coords,
+    game_state: GameState,
     selected_cell: Option<Coords>,
     exit: bool,
 }
 
 impl App {
     pub fn new() -> Self {
-        let mut players = HashMap::new();
-        players.insert(
-            1 as PlayerId,
-            Player {
-                direction: 1,
-                id: 1 as PlayerId,
-                name: "Kasparov".to_string(),
-                score: 0,
-            },
-        );
-        players.insert(
-            2 as PlayerId,
-            Player {
-                direction: -1,
-                id: 2 as PlayerId,
-                name: "Magnussen".to_string(),
-                score: 0,
-            },
-        );
         Self {
-            grid: Board::new(),
-            is_turn: 1,
+            game_state: GameState::new(),
             cursor_cell: Coords { x: 0, y: 0 },
             selected_cell: None,
             exit: false,
-            players: players,
             possible_moves: vec![],
         }
     }

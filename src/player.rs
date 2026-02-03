@@ -1,7 +1,4 @@
-use ratatui::{
-    style::{Style, Stylize},
-    text::{Line, Span, Text},
-};
+use ratatui::{style::Stylize, text::Line};
 
 pub type PlayerId = u64;
 
