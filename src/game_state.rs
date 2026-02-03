@@ -46,10 +46,14 @@ impl GameState {
         }
     }
 
-    pub fn reduce(&mut self, event: &GameEvent) {
-        if !self.validate(&event) {
-            return;
+    pub fn dispatch(&mut self, event: &GameEvent) -> Result<(), ()> {
+        if !self.validate(event) {
+            return Err(());
         }
+        self.reduce(event);
+        Ok(())
+    }
+    pub fn reduce(&mut self, event: &GameEvent) {
         match event {
             GameEvent::PlayerJoined { player } => {
                 println!("player {:?} joined", player.id);
