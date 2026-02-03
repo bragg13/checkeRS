@@ -2,14 +2,27 @@ use crate::{CELL_N, board::Board, coords::Coords, player::Player};
 
 #[derive(Debug, PartialEq)]
 pub enum Move {
-    Simple(Coords),
-    Capture { to: Coords, eat: Coords },
+    Simple {
+        from: Coords,
+        to: Coords,
+    },
+    Capture {
+        from: Coords,
+        to: Coords,
+        eat: Coords,
+    },
 }
 impl Move {
-    pub fn destination(&self) -> Coords {
+    pub fn to(&self) -> Coords {
         match self {
             Move::Capture { to, .. } => *to,
-            Move::Simple(to) => *to,
+            Move::Simple { to, .. } => *to,
+        }
+    }
+    pub fn from(&self) -> Coords {
+        match self {
+            Move::Capture { from, .. } => *from,
+            Move::Simple { from, .. } => *from,
         }
     }
 }
