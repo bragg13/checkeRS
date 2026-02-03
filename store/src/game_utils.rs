@@ -1,6 +1,6 @@
 use crate::{CELL_N, board::Board, coords::Coords, player::Player};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Move {
     Simple {
         from: Coords,

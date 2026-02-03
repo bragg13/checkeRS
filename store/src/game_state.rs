@@ -2,12 +2,16 @@ use std::collections::HashMap;
 
 use crate::{
     board::Board,
+    coords::Coords,
+    game_utils::Move,
+    piece::{Piece, PieceType},
     player::{Player, PlayerId},
 };
 
 #[derive(Debug, Clone)]
 pub enum GameEvent {
     PlayerJoined { player: Player },
+    Move { mv: Move, player_id: PlayerId },
 }
 
 #[derive(Debug)]
@@ -59,6 +63,7 @@ impl GameState {
                 println!("player {:?} joined", player.id);
                 self.players.insert(player.id, player.clone());
             }
+            GameEvent::Move { mv, player_id } => todo!(),
         }
         self.history.push(event.clone());
     }
@@ -70,7 +75,36 @@ impl GameState {
                     return false;
                 }
             }
+            GameEvent::Move { mv, player_id } => todo!(),
         }
         true
+    }
+
+    fn next_turn(&mut self) {
+        self.is_turn = if self.is_turn == 1 { 2 } else { 1 };
+    }
+
+    fn move_pawn(&mut self, mv: &Move, player_id: PlayerId) {
+        self.grid[mv.to()] = Some(Piece {
+            piece_type: PieceType::Pawn,
+            player_id,
+        });
+
+        // remove selected pawn from prev cell
+        self.grid[mv.from()] = None;
+
+        // eat if thats the case
+        match mv {
+            Move::Simple { .. } => {}
+            Move::Capture { eat, .. } => {
+                self.grid[*eat] = None;
+                if let Some(player) = self.players.get_mut(&self.is_turn) {
+                    player.score += 1;
+                }
+            }
+        }
+        //
+        // cleanup
+        self.next_turn();
     }
 }

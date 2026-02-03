@@ -18,12 +18,11 @@ use ratatui::{
 };
 
 use crate::{
-    board::Board,
     coords::Coords,
-    game_state::GameState,
+    game_state::{GameEvent, GameState},
     game_utils::{Move, coords_to_index, get_possible_moves, is_white},
     piece::{Piece, PieceType},
-    player::{Player, PlayerId},
+    player::PlayerId,
 };
 mod board;
 mod coords;
@@ -40,21 +39,20 @@ pub struct App {
     cursor_cell: Coords,
     game_state: GameState,
     selected_cell: Option<Coords>,
+    player_id: PlayerId,
     exit: bool,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(player_id: PlayerId) -> Self {
         Self {
             game_state: GameState::new(),
             cursor_cell: Coords { x: 0, y: 0 },
             selected_cell: None,
             exit: false,
+            player_id,
             possible_moves: vec![],
         }
-    }
-    fn next_turn(&mut self) {
-        self.is_turn = if self.is_turn == 1 { 2 } else { 1 };
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -122,35 +120,17 @@ impl App {
             let selected_move = self
                 .possible_moves
                 .iter()
-                .find(|possible_move| possible_move.destination() == self.cursor_cell);
+                .find(|possible_move| possible_move.to() == self.cursor_cell);
             match selected_move {
                 Some(mv) => {
                     // move selected pawn to selected cell
-                    self.grid[self.cursor_cell] = Some(Piece {
-                        piece_type: PieceType::Pawn,
-                        player_id: self.is_turn,
-                    });
-
-                    // remove selected pawn from prev cell
-                    if let Some(prev_cell) = self.selected_cell {
-                        self.grid[prev_cell] = None;
-                    }
-
-                    // eat if thats the case
-                    match mv {
-                        Move::Simple(..) => {}
-                        Move::Capture { eat, .. } => {
-                            self.grid[*eat] = None;
-                            if let Some(player) = self.players.get_mut(&self.is_turn) {
-                                player.score += 1;
-                            }
-                        }
-                    }
-                    //
-                    // cleanup
+                    let event = GameEvent::Move {
+                        mv: selected_move.unwrap().clone(),
+                        player_id: self.player_id,
+                    };
+                    self.game_state.dispatch(&event);
                     self.possible_moves.clear();
                     self.selected_cell = None;
-                    self.next_turn();
                 }
                 None => {}
             }
@@ -245,7 +225,7 @@ impl Widget for &App {
                 } else if self
                     .possible_moves
                     .iter()
-                    .map(|cell| cell.destination())
+                    .map(|cell| cell.to())
                     .collect::<Vec<_>>()
                     .contains(&coords)
                 {
@@ -279,5 +259,5 @@ impl Widget for &App {
 
 fn main() -> io::Result<()> {
     cli_log::init_cli_log!();
-    ratatui::run(|terminal| App::new().run(terminal))
+    ratatui::run(|terminal| App::new(1).run(terminal)) // TODO: change the player id
 }

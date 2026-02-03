@@ -1,0 +1,11 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+store = { path = "../store" }
+cli-log = "2.1.0"
+color-eyre = "0.6.5"
+crossterm = "0.29.0"
+ratatui = "0.30.0"
