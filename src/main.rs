@@ -26,6 +26,7 @@ use crate::{
 };
 mod board;
 mod coords;
+mod game_state;
 mod game_utils;
 mod piece;
 mod player;
@@ -34,13 +35,10 @@ static CELL_N: usize = 8;
 
 #[derive(Debug)]
 pub struct App {
-    grid: Board,
-    is_turn: PlayerId,
+    possible_moves: Vec<Move>,
     cursor_cell: Coords,
     selected_cell: Option<Coords>,
-    players: HashMap<PlayerId, Player>,
     exit: bool,
-    possible_moves: Vec<Move>,
 }
 
 impl App {
