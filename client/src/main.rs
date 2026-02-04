@@ -1,5 +1,6 @@
 use std::io;
 
+use cli_log::LevelFilter;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -251,6 +252,9 @@ impl Widget for &App {
 }
 
 fn main() -> io::Result<()> {
-    cli_log::init_cli_log!();
+    env_logger::Builder::from_default_env()
+        .filter_level(LevelFilter::Trace) // Show all logs
+        .init();
+
     ratatui::run(|terminal| App::new(1).run(terminal)) // TODO: change the player id
 }
