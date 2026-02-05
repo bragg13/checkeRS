@@ -298,6 +298,7 @@ dependencies = [
  "env_logger",
  "ratatui",
  "renet",
+ "renet_netcode",
  "server",
  "store",
 ]

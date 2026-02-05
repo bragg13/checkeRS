@@ -6,3 +6,5 @@ pub mod piece;
 pub mod player;
 
 pub static CELL_N: usize = 8;
+pub static CHANNEL_ID: u8 = 0;
+pub static PROTOCOL_ID: u64 = 0;

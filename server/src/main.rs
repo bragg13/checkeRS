@@ -1,12 +1,9 @@
 use cli_log::{info, trace};
-use color_eyre::owo_colors::colors::Default;
 use renet::{ConnectionConfig, DefaultChannel, RenetServer, ServerEvent};
-use renet_netcode::{
-    ClientAuthentication, NETCODE_USER_DATA_BYTES, NetcodeClientTransport, NetcodeServerTransport,
-    ServerAuthentication, ServerConfig,
-};
+use renet_netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::time::{Duration, Instant, SystemTime};
+use store::{CHANNEL_ID, PROTOCOL_ID};
 
 fn main() {
     env_logger::Builder::from_default_env()
@@ -22,7 +19,7 @@ fn main() {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap(),
         max_clients: 2,
-        protocol_id: 0,
+        protocol_id: PROTOCOL_ID,
         public_addresses: vec![SERVER_ADDR],
         authentication: ServerAuthentication::Unsecure,
     };
@@ -36,6 +33,7 @@ fn main() {
         last_updated = now;
         server.update(duration);
         transport.update(duration, &mut server).unwrap();
+        trace!("🕹 server looping...");
 
         // handles events
         while let Some(event) = server.get_event() {
@@ -43,7 +41,7 @@ fn main() {
                 ServerEvent::ClientConnected { client_id } => {
                     info!("Client connected! {}", client_id);
                 }
-                ServerEvent::ClientDisconnected { client_id, reason } => {
+                ServerEvent::ClientDisconnected { client_id, .. } => {
                     info!(":( Client disconnected! {}", client_id);
                 }
             }
@@ -55,11 +53,12 @@ fn main() {
             {
                 info!("Received message from {} saying {:?}.", client_id, msg);
 
+                server.send_message(client_id, CHANNEL_ID, msg);
                 // server.send_message or handling...
             }
         }
 
         transport.send_packets(&mut server);
-        std::thread::sleep(Duration::from_millis(50));
+        std::thread::sleep(Duration::from_millis(1000));
     }
 }
