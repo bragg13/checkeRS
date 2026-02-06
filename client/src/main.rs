@@ -1,7 +1,13 @@
-use std::io;
+use std::{
+    io,
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant, SystemTime},
+};
 
-use cli_log::LevelFilter;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use cli_log::{LevelFilter, info, trace};
+use crossterm::event::{self, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -17,8 +23,13 @@ use ratatui::{
         canvas::{Canvas, Circle},
     },
 };
+use renet::{Bytes, ClientId, ConnectionConfig, DefaultChannel, RenetClient};
+use renet_netcode::{
+    ClientAuthentication, NETCODE_USER_DATA_BYTES, NetcodeClientTransport, NetcodeServerTransport,
+    ServerAuthentication, ServerConfig,
+};
 use store::{
-    CELL_N,
+    CELL_N, PROTOCOL_ID,
     coords::Coords,
     game_state::{GameEvent, GameState},
     game_utils::{Move, coords_to_index, get_possible_moves, is_white},
@@ -35,6 +46,67 @@ pub struct App {
     exit: bool,
 }
 
+// events that can trigger re-render in client
+// TODO: change name
+enum ClientEvent {
+    Input(crossterm::event::KeyEvent),
+    ServerMessage(Bytes), // TODO: will be GameEvent
+}
+
+// main thread - TUI rendering on input updates
+fn handle_input_events(tx: mpsc::Sender<ClientEvent>) {
+    loop {
+        match crossterm::event::read().unwrap() {
+            crossterm::event::Event::Key(key_event) => {
+                tx.send(ClientEvent::Input(key_event)).unwrap()
+            }
+            _ => {}
+        }
+    }
+}
+// atm, receives messages from the server and sends them back to the main thread to do the re-rendering
+// TODO: client should be able to send messages to the server (communicate own's moves)
+fn run_net_thread(tx: mpsc::Sender<ClientEvent>) {
+    const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 5000);
+    const CLIENT_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
+
+    let socket = UdpSocket::bind(CLIENT_ADDR).unwrap();
+    let current_time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+
+    let client_id = ClientId::from(current_time.as_millis() as u64);
+    let mut client = RenetClient::new(ConnectionConfig::default());
+
+    let auth = ClientAuthentication::Unsecure {
+        client_id,
+        protocol_id: PROTOCOL_ID,
+        server_addr: SERVER_ADDR,
+        user_data: None,
+    };
+    let mut transport = NetcodeClientTransport::new(current_time, auth, socket).unwrap();
+    info!("Client connecting to {}", SERVER_ADDR);
+    let mut last_updated = Instant::now();
+
+    loop {
+        let now = Instant::now();
+        let duration = now - last_updated;
+        last_updated = now;
+
+        client.update(duration);
+        transport.update(duration, &mut client).unwrap();
+
+        if client.is_connected() {
+            while let Some(message) = client.receive_message(DefaultChannel::ReliableOrdered) {
+                info!("Received message from server {:?}", message);
+                tx.send(ClientEvent::ServerMessage(message)).unwrap();
+            }
+        }
+        transport.send_packets(&mut client).unwrap();
+    }
+}
+
+/// ====== MAIN APP =======
 impl App {
     pub fn new(player_id: PlayerId) -> Self {
         Self {
@@ -47,36 +119,37 @@ impl App {
         }
     }
 
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+    pub fn run(
+        &mut self,
+        terminal: &mut DefaultTerminal,
+        rx: mpsc::Receiver<ClientEvent>,
+    ) -> io::Result<()> {
         while !self.exit {
+            match rx.recv().unwrap() {
+                ClientEvent::Input(key_event) => {
+                    if key_event.kind == KeyEventKind::Press {
+                        match key_event.code {
+                            KeyCode::Char('q') => self.exit(),
+                            KeyCode::Char('h') => self.left(),
+                            KeyCode::Char('j') => self.down(),
+                            KeyCode::Char('k') => self.up(),
+                            KeyCode::Char('l') => self.right(),
+                            KeyCode::Char(' ') => self.select(),
+                            _ => {}
+                        }
+                    }
+                }
+                ClientEvent::ServerMessage(bytes) => {
+                    info!("{:?}", bytes);
+                }
+            };
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
         }
         Ok(())
     }
 
     fn draw(&self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
-    }
-
-    fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                // if self.is_turn == self.player_id {
-                match key_event.code {
-                    KeyCode::Char('q') => self.exit(),
-                    KeyCode::Char('h') => self.left(),
-                    KeyCode::Char('j') => self.down(),
-                    KeyCode::Char('k') => self.up(),
-                    KeyCode::Char('l') => self.right(),
-                    KeyCode::Char(' ') => self.select(),
-                    _ => {}
-                }
-                // }
-            }
-            _ => {}
-        };
-        Ok(())
     }
 
     fn exit(&mut self) {
@@ -253,8 +326,20 @@ impl Widget for &App {
 
 fn main() -> io::Result<()> {
     env_logger::Builder::from_default_env()
-        .filter_level(LevelFilter::Trace) // Show all logs
+        .filter_level(LevelFilter::Info) // Show all logs
         .init();
 
-    ratatui::run(|terminal| App::new(1).run(terminal)) // TODO: change the player id
+    let (event_tx, event_rx) = mpsc::channel::<ClientEvent>();
+    let tx_to_input_events = event_tx.clone();
+    thread::spawn(move || {
+        handle_input_events(tx_to_input_events);
+    });
+
+    let tx_to_net_thread = event_tx.clone();
+    thread::spawn(move || {
+        run_net_thread(tx_to_net_thread);
+    });
+
+    // UI takes receiver channel from which other threads communicate
+    ratatui::run(|terminal| App::new(1).run(terminal, event_rx)) // TODO: change the player id
 }
