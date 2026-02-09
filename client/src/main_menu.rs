@@ -5,6 +5,8 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 use tui_input::Input;
+
+use crate::{Scene, SceneTransition, game::GameScene};
 #[derive(Debug)]
 pub struct MainMenuScene {
     submit: bool,
@@ -74,20 +76,25 @@ impl MainMenuScene {
             focused: 0,
         }
     }
-    pub fn handle_input(&mut self, key_event: KeyEvent) {
+    pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
         match key_event.code {
-            KeyCode::Enter => self.submit = true,
+            KeyCode::Enter => {
+                self.submit = true;
+                SceneTransition::ToGame
+            }
             KeyCode::Char('j') => {
                 if self.focused < 2 {
                     self.focused += 1
                 }
+                SceneTransition::None
             }
             KeyCode::Char('k') => {
                 if self.focused > 0 {
                     self.focused -= 1
                 }
+                SceneTransition::None
             }
-            _ => {}
+            _ => SceneTransition::None,
         }
     }
 }

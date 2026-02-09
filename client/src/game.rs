@@ -20,6 +20,8 @@ use store::{
     player::{Player, PlayerId},
 };
 
+use crate::SceneTransition;
+
 #[derive(Debug)]
 pub struct GameScene {
     players: HashMap<PlayerId, Player>,
@@ -41,7 +43,7 @@ impl GameScene {
             possible_moves: vec![],
         }
     }
-    pub fn handle_input(&mut self, key_event: KeyEvent) {
+    pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
         match key_event.code {
             KeyCode::Char('h') => self.left(),
             KeyCode::Char('j') => self.down(),
@@ -50,6 +52,7 @@ impl GameScene {
             KeyCode::Char(' ') => self.select(),
             _ => {}
         }
+        SceneTransition::None
     }
     fn left(&mut self) {
         if self.cursor_cell.x != 0 {

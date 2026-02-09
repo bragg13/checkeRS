@@ -25,12 +25,18 @@ use store::PROTOCOL_ID;
 use crate::{game::GameScene, main_menu::MainMenuScene};
 
 #[derive(Debug)]
-enum Scene {
+pub enum Scene {
     Menu(MainMenuScene),
     Game(GameScene),
 }
+#[derive(Debug)]
+pub enum SceneTransition {
+    None,
+    ToGame,
+    ToMenu,
+}
 impl Scene {
-    pub fn handle_input(&mut self, key_event: KeyEvent) {
+    pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
         match self {
             Scene::Menu(menu) => menu.handle_input(key_event),
             Scene::Game(game) => game.handle_input(key_event),
@@ -41,8 +47,7 @@ impl Scene {
 #[derive(Debug)]
 pub struct App {
     exit: bool,
-    scenes: Vec<Scene>,
-    current_scene: usize,
+    current_scene: Scene,
 }
 
 // events that can trigger re-render in client
@@ -110,12 +115,7 @@ impl App {
     pub fn new() -> Self {
         Self {
             exit: false,
-            // there has to be a better way
-            scenes: vec![
-                Scene::Menu(MainMenuScene::new()),
-                Scene::Game(GameScene::new()),
-            ],
-            current_scene: 0,
+            current_scene: Scene::Menu(MainMenuScene::new()),
         }
     }
 
@@ -130,8 +130,16 @@ impl App {
                     if key_event.kind == KeyEventKind::Press {
                         if key_event.code == KeyCode::Char('q') {
                             self.exit();
-                        } else if let Some(scene) = self.scenes.get_mut(self.current_scene) {
-                            scene.handle_input(key_event);
+                        } else {
+                            match self.current_scene.handle_input(key_event) {
+                                SceneTransition::None => {}
+                                SceneTransition::ToGame => {
+                                    self.current_scene = Scene::Game(GameScene::new())
+                                }
+                                SceneTransition::ToMenu => {
+                                    self.current_scene = Scene::Menu(MainMenuScene::new())
+                                }
+                            }
                         }
                     }
                 }
@@ -181,7 +189,7 @@ impl Widget for &App {
             .render(area, buf);
 
         // TODO: can maybe move to Scene impl?
-        match &self.scenes[self.current_scene] {
+        match &self.current_scene {
             Scene::Menu(main_menu_scene) => main_menu_scene.render(area, buf),
             Scene::Game(game_scene) => game_scene.render(area, buf),
         }
