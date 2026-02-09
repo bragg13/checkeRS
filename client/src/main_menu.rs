@@ -74,8 +74,8 @@ impl MainMenuScene {
     pub fn new() -> Self {
         Self {
             submit: false,
-            username_in: Input::default(),
-            addr_in: Input::default(),
+            username_in: Input::default().with_value("andrea".into()),
+            addr_in: Input::default().with_value("127.0.0.1:5000".into()),
             focused: 0,
         }
     }
