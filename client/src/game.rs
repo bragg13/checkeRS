@@ -45,10 +45,10 @@ impl GameScene {
     }
     pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
         match key_event.code {
-            KeyCode::Char('h') => self.left(),
-            KeyCode::Char('j') => self.down(),
-            KeyCode::Char('k') => self.up(),
-            KeyCode::Char('l') => self.right(),
+            KeyCode::Left => self.left(),
+            KeyCode::Down => self.down(),
+            KeyCode::Up => self.up(),
+            KeyCode::Right => self.right(),
             KeyCode::Char(' ') => self.select(),
             _ => {}
         }

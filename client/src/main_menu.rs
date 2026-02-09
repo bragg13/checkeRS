@@ -82,13 +82,13 @@ impl MainMenuScene {
                 self.submit = true;
                 SceneTransition::ToGame
             }
-            KeyCode::Char('j') => {
+            KeyCode::Down => {
                 if self.focused < 2 {
                     self.focused += 1
                 }
                 SceneTransition::None
             }
-            KeyCode::Char('k') => {
+            KeyCode::Up => {
                 if self.focused > 0 {
                     self.focused -= 1
                 }
