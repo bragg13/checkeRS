@@ -1,8 +1,10 @@
 use std::ops::{Add, Sub};
 
+use serde::{Deserialize, Serialize};
+
 use crate::CELL_N;
 
-#[derive(Debug, Default, Copy, Clone, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Coords {
     pub x: usize,
     pub y: usize,

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     board::Board,
     game_utils::Move,
@@ -7,15 +9,7 @@ use crate::{
     player::{Player, PlayerId},
 };
 
-#[derive(Debug, Clone)]
-pub enum GameStage {
-    MainMenu,
-    Lobby,
-    InGame,
-    EndGame,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GameEvent {
     PlayerJoined { player: Player },
     Move { mv: Move, player_id: PlayerId },
@@ -27,7 +21,6 @@ pub struct GameState {
     pub is_turn: PlayerId,
     pub players: HashMap<PlayerId, Player>,
     history: Vec<GameEvent>,
-    pub game_stage: usize,
 }
 impl GameState {
     pub fn new() -> Self {
@@ -55,7 +48,6 @@ impl GameState {
             is_turn: 1,
             players: HashMap::new(), //players,
             history: vec![],
-            game_stage: 0,
         }
     }
 

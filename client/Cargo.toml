@@ -14,3 +14,5 @@ server = { version = "0.1.0", path = "../server" }
 env_logger = "0.11.8"
 renet_netcode = "2.0.0"
 tui-input = "0.15.0"
+serde = { version = "1.0", features = ["derive"] }
+postcard = "1.0"

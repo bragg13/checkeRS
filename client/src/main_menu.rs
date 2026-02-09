@@ -5,6 +5,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Block, Borders, Paragraph, Widget},
 };
+use store::player::{Player, PlayerId};
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 use crate::{Scene, SceneTransition, game::GameScene};
@@ -76,7 +77,7 @@ impl MainMenuScene {
             submit: false,
             username_in: Input::default().with_value("andrea".into()),
             addr_in: Input::default().with_value("127.0.0.1:5000".into()),
-            focused: 0,
+            focused: 2,
         }
     }
     fn can_submit(&self) -> bool {
@@ -88,7 +89,10 @@ impl MainMenuScene {
             KeyCode::Enter => {
                 if self.can_submit() && self.focused == 2 {
                     self.submit = true;
-                    SceneTransition::ToGame
+                    SceneTransition::ToGame(
+                        String::from(self.username_in.value()),
+                        String::from(self.addr_in.value()),
+                    )
                 } else {
                     SceneTransition::None
                 }
