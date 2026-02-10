@@ -21,8 +21,8 @@ impl Widget for &MainMenuScene {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer) {
         let block = Block::bordered().title("Start a new game");
         let inner = block.inner(area.inner(Margin {
-            horizontal: 10,
-            vertical: 10,
+            horizontal: 1,
+            vertical: 1,
         }));
         block.render(area, buf);
 
