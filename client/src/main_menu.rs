@@ -118,7 +118,7 @@ impl MainMenuScene {
             GameEvent::PlayerJoined { player } => {
                 self.players.insert(player.id, player);
                 if self.players.len() == 2 {
-                    info!("starting game...");
+                    // info!("starting game...");
                     return SceneTransition::ToGame(self.players.clone());
                 } else {
                     return SceneTransition::None;

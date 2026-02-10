@@ -84,10 +84,22 @@ fn handle_input_events(tx: mpsc::Sender<ChannelMessage>) {
 // atm, receives messages from the server and sends them back to the main thread to do the re-rendering
 // TODO: client should be able to send messages to the server (communicate own's moves)
 fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: String) {
-    let SERVER_ADDR: SocketAddr = address.parse().unwrap();
+    let SERVER_ADDR: SocketAddr = match address.parse() {
+        Ok(addr) => addr,
+        Err(e) => {
+            info!("❌ Invalid address '{}': {}", address, e);
+            return;
+        }
+    };
     let CLIENT_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
 
-    let socket = UdpSocket::bind(CLIENT_ADDR).unwrap();
+    let socket = match UdpSocket::bind(CLIENT_ADDR) {
+        Ok(s) => s,
+        Err(e) => {
+            info!("❌ Failed to bind socket: {}", e);
+            return;
+        }
+    };
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
@@ -95,10 +107,6 @@ fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: S
     let client_id = ClientId::from(current_time.as_millis() as u64);
     let mut client = RenetClient::new(ConnectionConfig::default());
 
-    info!(
-        "Client at {} with username {} connecting to {}",
-        CLIENT_ADDR, username, SERVER_ADDR
-    );
     let auth = ClientAuthentication::Unsecure {
         client_id,
         protocol_id: PROTOCOL_ID,
@@ -106,8 +114,16 @@ fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: S
         user_data: Some(to_netcode_user_data(username)),
     };
 
-    let mut transport = NetcodeClientTransport::new(current_time, auth, socket).unwrap();
+    let mut transport = match NetcodeClientTransport::new(current_time, auth, socket) {
+        Ok(t) => t,
+        Err(e) => {
+            info!("❌ Failed to create transport: {}", e);
+            return;
+        }
+    };
+
     let mut last_updated = Instant::now();
+    // let mut connection_timeout = Instant::now();
 
     loop {
         let now = Instant::now();
@@ -115,22 +131,40 @@ fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: S
         last_updated = now;
 
         client.update(duration);
-        transport.update(duration, &mut client).unwrap();
+        if let Err(e) = transport.update(duration, &mut client) {
+            info!("❌ Transport error: {}", e);
+            break;
+        };
 
         // whenever we get a message from server...
         if client.is_connected() {
+            // Reset timeout once connected
+            // connection_timeout = Instant::now();
+
             while let Some(message) = client.receive_message(DefaultChannel::ReliableOrdered) {
-                info!("Received message from server {:?}", message);
+                // info!("Received message from server {:?}", message);
                 // .... if we can deserialize it as a game event....
                 match postcard::from_bytes::<GameEvent>(&message) {
                     // .... we send it to the main thread to be handled
-                    Ok(game_event) => tx.send(ChannelMessage::ServerMessage(game_event)).unwrap(),
-                    _ => (),
+                    Ok(game_event) => {
+                        if tx.send(ChannelMessage::ServerMessage(game_event)).is_err() {
+                            info!("❌ Main thread closed, exiting network thread");
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        info!("⚠️ Failed to deserialize message: {}", e);
+                    }
                 }
             }
         }
-        transport.send_packets(&mut client).unwrap();
+        if let Err(e) = transport.send_packets(&mut client) {
+            info!("❌ Failed to send packets: {}", e);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(16));
     }
+    info!("🔌 Network thread exiting");
 }
 
 /// ====== MAIN APP =======
@@ -183,7 +217,7 @@ impl App {
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    info!("channel closed, exiting...");
+                    // info!("channel closed, exiting...");
                     break;
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
