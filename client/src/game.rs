@@ -125,15 +125,11 @@ impl Widget for &GameScene {
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
 
         // info area // TODO
-        if let Some(player1) = self.game_state.players.get(&(1 as PlayerId))
-            && let Some(player2) = self.game_state.players.get(&(2 as PlayerId))
-        {
-            Paragraph::new(vec![
-                player1.pretty_print_scoreboard().left_aligned(),
-                player2.pretty_print_scoreboard().left_aligned(),
-            ])
-            .render(info_area, buf);
-        };
+        let mut players_scoreboard = vec![];
+        for player in self.game_state.players.iter() {
+            players_scoreboard.push(player.1.pretty_print_scoreboard().left_aligned());
+        }
+        Paragraph::new(players_scoreboard).render(info_area, buf);
 
         // board
         let cell_size = board_area.height / 8;

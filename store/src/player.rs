@@ -14,10 +14,9 @@ pub struct Player {
 impl Player {
     pub fn pretty_print_scoreboard(&self) -> Line<'static> {
         Line::from(vec![
-            format!("player {:?}: ", self.id).into(),
-            format!("{:?}", self.name).green(),
+            format!("{}", self.name).green(),
             format!(" score:").white(),
-            format!(" {:?}", self.score).white().bold(),
+            format!(" {}", self.score).white().bold(),
         ])
     }
 }
