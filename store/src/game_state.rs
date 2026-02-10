@@ -24,30 +24,11 @@ pub struct GameState {
     history: Vec<GameEvent>,
 }
 impl GameState {
-    pub fn new() -> Self {
-        // let mut players = HashMap::new();
-        // players.insert(
-        //     1 as PlayerId,
-        //     Player {
-        //         direction: 1,
-        //         id: 1 as PlayerId,
-        //         name: "Kasparov".to_string(),
-        //         score: 0,
-        //     },
-        // );
-        // players.insert(
-        //     2 as PlayerId,
-        //     Player {
-        //         direction: -1,
-        //         id: 2 as PlayerId,
-        //         name: "Magnussen".to_string(),
-        //         score: 0,
-        //     },
-        // );
+    pub fn new(players: Option<HashMap<PlayerId, Player>>) -> Self {
         Self {
             grid: Board::new(),
             is_turn: 1,
-            players: HashMap::new(), //players,
+            players: players.unwrap_or(HashMap::new()),
             history: vec![],
         }
     }
@@ -61,11 +42,9 @@ impl GameState {
     }
     pub fn reduce(&mut self, event: &GameEvent) {
         match event {
-            GameEvent::PlayerJoined { player } => {
-                self.players.insert(player.id, player.clone());
-            }
             GameEvent::Move { mv, player_id } => self.move_pawn(mv, *player_id),
             GameEvent::TurnChanged { player_id } => self.is_turn = *player_id,
+            GameEvent::PlayerJoined { .. } => {}
         }
         self.history.push(event.clone());
     }

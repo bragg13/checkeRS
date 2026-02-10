@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use cli_log::info;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
@@ -5,19 +7,21 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph, Widget},
 };
-use store::game_state::GameEvent;
-use throbber_widgets_tui::ASCII;
+use store::{
+    game_state::GameEvent,
+    player::{Player, PlayerId},
+};
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 use crate::{Scene, SceneTransition, game::GameScene};
 #[derive(Debug)]
 pub struct MainMenuScene {
+    pub players: HashMap<PlayerId, Player>, // could make sense if i wanted to show players list in lobby...?
     submit: bool,
     username_in: Input,
     addr_in: Input,
     focused: usize,
     num_players: usize,
-    // throbber_state: throbber_widgets_tui::ThrobberState,
 }
 
 impl Widget for &MainMenuScene {
@@ -102,6 +106,7 @@ impl MainMenuScene {
             addr_in: Input::default().with_value("127.0.0.1:5000".into()),
             focused: 2,
             num_players: 0,
+            players: HashMap::new(),
         }
     }
     fn can_submit(&self) -> bool {
@@ -111,9 +116,10 @@ impl MainMenuScene {
     pub fn handle_server_events(&mut self, game_event: GameEvent) -> SceneTransition {
         match game_event {
             GameEvent::PlayerJoined { player } => {
-                self.num_players += 1;
-                if self.num_players == 2 {
-                    return SceneTransition::ToGame;
+                self.players.insert(player.id, player);
+                if self.players.len() == 2 {
+                    info!("starting game...");
+                    return SceneTransition::ToGame(self.players.clone());
                 } else {
                     return SceneTransition::None;
                 }

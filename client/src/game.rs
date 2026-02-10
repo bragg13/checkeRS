@@ -1,4 +1,3 @@
-use color_eyre::owo_colors::{OwoColorize, colors::xterm::ScreaminGreen};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Constraint::Length, style::Stylize};
 use std::collections::HashMap;
@@ -21,11 +20,10 @@ use store::{
     player::{Player, PlayerId},
 };
 
-use crate::{SceneTransition, game};
+use crate::SceneTransition;
 
 #[derive(Debug)]
 pub struct GameScene {
-    pub players: HashMap<PlayerId, Player>,
     game_state: GameState,
     possible_moves: Vec<Move>,
     cursor_cell: Coords,
@@ -34,10 +32,9 @@ pub struct GameScene {
 }
 
 impl GameScene {
-    pub fn new() -> Self {
+    pub fn new(players: HashMap<PlayerId, Player>) -> Self {
         Self {
-            game_state: GameState::new(),
-            players: HashMap::new(),
+            game_state: GameState::new(Some(players.clone())),
             cursor_cell: Coords { x: 0, y: 0 },
             selected_cell: None,
             player_id: 0,
@@ -45,7 +42,7 @@ impl GameScene {
         }
     }
     pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
-        if self.players.len() < 2 {
+        if self.game_state.players.len() < 2 {
             return SceneTransition::None;
         }
         match key_event.code {
@@ -128,8 +125,8 @@ impl Widget for &GameScene {
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
 
         // info area // TODO
-        if let Some(player1) = self.players.get(&(1 as PlayerId))
-            && let Some(player2) = self.players.get(&(2 as PlayerId))
+        if let Some(player1) = self.game_state.players.get(&(1 as PlayerId))
+            && let Some(player2) = self.game_state.players.get(&(2 as PlayerId))
         {
             Paragraph::new(vec![
                 player1.pretty_print_scoreboard().left_aligned(),

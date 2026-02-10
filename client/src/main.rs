@@ -1,6 +1,7 @@
 mod game;
 mod main_menu;
 use std::{
+    collections::HashMap,
     io,
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     sync::mpsc,
@@ -20,7 +21,12 @@ use ratatui::{
 };
 use renet::{ClientId, ConnectionConfig, DefaultChannel, RenetClient};
 use renet_netcode::{ClientAuthentication, NetcodeClientTransport};
-use store::{PROTOCOL_ID, game_state::GameEvent, utils::to_netcode_user_data};
+use store::{
+    PROTOCOL_ID,
+    game_state::GameEvent,
+    player::{Player, PlayerId},
+    utils::to_netcode_user_data,
+};
 
 use crate::{game::GameScene, main_menu::MainMenuScene};
 
@@ -32,7 +38,7 @@ pub enum Scene {
 #[derive(Debug)]
 pub enum SceneTransition {
     None,
-    ToGame,
+    ToGame(HashMap<PlayerId, Player>),
     ToMenu,
     ToLobby(String, String),
 }
@@ -159,8 +165,8 @@ impl App {
                                 SceneTransition::ToMenu => {
                                     self.current_scene = Scene::Menu(MainMenuScene::new()) // after game is finished
                                 }
-                                SceneTransition::ToGame => {
-                                    self.current_scene = Scene::Game(GameScene::new()); // after two players join the lobby
+                                SceneTransition::ToGame(players) => {
+                                    self.current_scene = Scene::Game(GameScene::new(players)); // after two players join the lobby
                                 }
                                 SceneTransition::None => {}
                             }
@@ -170,8 +176,8 @@ impl App {
                 Ok(ChannelMessage::ServerMessage(game_event)) => {
                     // this can get triggered when players join (sever events)
                     match self.current_scene.handle_event(game_event) {
-                        SceneTransition::ToGame => {
-                            self.current_scene = Scene::Game(GameScene::new());
+                        SceneTransition::ToGame(players) => {
+                            self.current_scene = Scene::Game(GameScene::new(players));
                         }
                         _ => {}
                     }
