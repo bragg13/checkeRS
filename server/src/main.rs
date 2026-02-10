@@ -1,8 +1,9 @@
-use cli_log::{info, trace};
+use cli_log::info;
 use renet::{ConnectionConfig, DefaultChannel, RenetServer, ServerEvent};
 use renet_netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::time::{Duration, Instant, SystemTime};
+use store::utils::from_user_data;
 use store::{CHANNEL_ID, PROTOCOL_ID};
 
 fn main() {
@@ -39,7 +40,12 @@ fn main() {
         while let Some(event) = server.get_event() {
             match event {
                 ServerEvent::ClientConnected { client_id } => {
-                    info!("Client connected! {}", client_id);
+                    let user_data = transport.user_data(client_id).unwrap();
+                    info!(
+                        "Client connected! {} with username {}",
+                        client_id,
+                        from_user_data(&user_data)
+                    );
                     server.send_message(
                         client_id,
                         DefaultChannel::ReliableOrdered,
