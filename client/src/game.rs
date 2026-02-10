@@ -1,3 +1,4 @@
+use color_eyre::owo_colors::{OwoColorize, colors::xterm::ScreaminGreen};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Constraint::Length, style::Stylize};
 use std::collections::HashMap;
@@ -20,7 +21,7 @@ use store::{
     player::{Player, PlayerId},
 };
 
-use crate::SceneTransition;
+use crate::{SceneTransition, game};
 
 #[derive(Debug)]
 pub struct GameScene {
@@ -57,11 +58,9 @@ impl GameScene {
         }
         SceneTransition::None
     }
-    pub fn handle_server_events(&mut self, game_event: GameEvent) {
-        match game_event {
-            GameEvent::PlayerJoined { player } => todo!(),
-            GameEvent::Move { mv, player_id } => todo!(),
-        }
+    pub fn handle_server_events(&mut self, game_event: GameEvent) -> SceneTransition {
+        self.game_state.reduce(&game_event);
+        SceneTransition::None
     }
     fn left(&mut self) {
         if self.cursor_cell.x != 0 {

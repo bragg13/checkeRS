@@ -32,8 +32,9 @@ pub enum Scene {
 #[derive(Debug)]
 pub enum SceneTransition {
     None,
-    ToGame(String, String),
+    ToGame,
     ToMenu,
+    ToLobby(String, String),
 }
 impl Scene {
     pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
@@ -42,9 +43,9 @@ impl Scene {
             Scene::Game(game_scene) => game_scene.handle_input(key_event),
         }
     }
-    pub fn handle_event(&mut self, game_event: GameEvent) {
+    pub fn handle_event(&mut self, game_event: GameEvent) -> SceneTransition {
         match self {
-            Scene::Menu(menu) => todo!(),
+            Scene::Menu(menu) => menu.handle_server_events(game_event),
             Scene::Game(game_scene) => game_scene.handle_server_events(game_event),
         }
     }
@@ -149,24 +150,31 @@ impl App {
                             self.exit();
                         } else {
                             match self.current_scene.handle_input(key_event) {
-                                SceneTransition::None => {}
-                                SceneTransition::ToGame(username, address) => {
-                                    // communicate to the server...
-                                    self.current_scene = Scene::Game(GameScene::new());
+                                SceneTransition::ToLobby(username, address) => {
                                     let tx_to_net_thread = tx.clone();
                                     thread::spawn(move || {
                                         run_net_thread(tx_to_net_thread, username, address);
                                     });
                                 }
                                 SceneTransition::ToMenu => {
-                                    self.current_scene = Scene::Menu(MainMenuScene::new())
+                                    self.current_scene = Scene::Menu(MainMenuScene::new()) // after game is finished
                                 }
+                                SceneTransition::ToGame => {
+                                    self.current_scene = Scene::Game(GameScene::new()); // after two players join the lobby
+                                }
+                                SceneTransition::None => {}
                             }
                         }
                     }
                 }
                 Ok(ChannelMessage::ServerMessage(game_event)) => {
-                    self.current_scene.handle_event(game_event);
+                    // this can get triggered when players join (sever events)
+                    match self.current_scene.handle_event(game_event) {
+                        SceneTransition::ToGame => {
+                            self.current_scene = Scene::Game(GameScene::new());
+                        }
+                        _ => {}
+                    }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     info!("channel closed, exiting...");

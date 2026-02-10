@@ -12,6 +12,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GameEvent {
     PlayerJoined { player: Player },
+    TurnChanged { player_id: PlayerId },
     Move { mv: Move, player_id: PlayerId },
 }
 
@@ -61,10 +62,10 @@ impl GameState {
     pub fn reduce(&mut self, event: &GameEvent) {
         match event {
             GameEvent::PlayerJoined { player } => {
-                println!("player {:?} joined", player.id);
                 self.players.insert(player.id, player.clone());
             }
-            GameEvent::Move { mv, player_id } => todo!(),
+            GameEvent::Move { mv, player_id } => self.move_pawn(mv, *player_id),
+            GameEvent::TurnChanged { player_id } => self.is_turn = *player_id,
         }
         self.history.push(event.clone());
     }
@@ -77,12 +78,9 @@ impl GameState {
                 }
             }
             GameEvent::Move { mv, player_id } => todo!(),
+            GameEvent::TurnChanged { player_id } => todo!(),
         }
         true
-    }
-
-    fn next_turn(&mut self) {
-        self.is_turn = if self.is_turn == 1 { 2 } else { 1 };
     }
 
     fn move_pawn(&mut self, mv: &Move, player_id: PlayerId) {
@@ -105,7 +103,5 @@ impl GameState {
             }
         }
         //
-        // cleanup
-        self.next_turn();
     }
 }

@@ -3,6 +3,8 @@ use renet::{ConnectionConfig, DefaultChannel, RenetServer, ServerEvent};
 use renet_netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::time::{Duration, Instant, SystemTime};
+use store::game_state::GameEvent;
+use store::player::{Player, PlayerId};
 use store::utils::from_user_data;
 use store::{CHANNEL_ID, PROTOCOL_ID};
 
@@ -41,32 +43,35 @@ fn main() {
             match event {
                 ServerEvent::ClientConnected { client_id } => {
                     let user_data = transport.user_data(client_id).unwrap();
-                    info!(
-                        "Client connected! {} with username {}",
-                        client_id,
-                        from_user_data(&user_data)
-                    );
-                    server.send_message(
-                        client_id,
-                        DefaultChannel::ReliableOrdered,
-                        "Welcome aboard!",
-                    );
+                    let username = from_user_data(&user_data);
+                    info!("Client connected! {} with username {}", client_id, username);
+
+                    // notify all players that a new player joined
+                    let joined_event = GameEvent::PlayerJoined {
+                        player: Player {
+                            id: username.len() as PlayerId,
+                            name: username,
+                            direction: 1,
+                            score: 0,
+                        },
+                    };
+                    let bytes = postcard::to_allocvec(&joined_event).unwrap();
+                    server.broadcast_message(DefaultChannel::ReliableOrdered, bytes);
                 }
                 ServerEvent::ClientDisconnected { client_id, reason } => {
                     info!(":( Client disconnected! {client_id}, reason: {reason}");
+                    // server.broadcast_message(
+                    //     DefaultChannel::ReliableOrdered,
+                    //     b"a player disconnected", // TODO: make this an event
+                    // );
                 }
             }
         }
 
         // receive messges from channel
-        for client_id in server.clients_id() {
-            // default channel is the one used in the configuration
-            while let Some(msg) = server.receive_message(client_id, DefaultChannel::ReliableOrdered)
-            {
-                info!("Received message from {} saying {:?}.", client_id, msg);
-                server.send_message(client_id, DefaultChannel::ReliableOrdered, msg);
-            }
-        }
+        // for client_id in server.clients_id() {
+        //     // default channel is the one used in the configuration
+        // }
 
         transport.send_packets(&mut server);
         std::thread::sleep(Duration::from_millis(16));
