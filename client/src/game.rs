@@ -24,7 +24,7 @@ use crate::SceneTransition;
 
 #[derive(Debug)]
 pub struct GameScene {
-    players: HashMap<PlayerId, Player>,
+    pub players: HashMap<PlayerId, Player>,
     game_state: GameState,
     possible_moves: Vec<Move>,
     cursor_cell: Coords,
@@ -44,6 +44,9 @@ impl GameScene {
         }
     }
     pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
+        if self.players.len() < 2 {
+            return SceneTransition::None;
+        }
         match key_event.code {
             KeyCode::Left => self.left(),
             KeyCode::Down => self.down(),
@@ -53,6 +56,12 @@ impl GameScene {
             _ => {}
         }
         SceneTransition::None
+    }
+    pub fn handle_server_events(&mut self, game_event: GameEvent) {
+        match game_event {
+            GameEvent::PlayerJoined { player } => todo!(),
+            GameEvent::Move { mv, player_id } => todo!(),
+        }
     }
     fn left(&mut self) {
         if self.cursor_cell.x != 0 {

@@ -18,9 +18,9 @@ use ratatui::{
     text::Line,
     widgets::{Block, Widget},
 };
-use renet::{Bytes, ClientId, ConnectionConfig, DefaultChannel, RenetClient};
+use renet::{ClientId, ConnectionConfig, DefaultChannel, RenetClient};
 use renet_netcode::{ClientAuthentication, NetcodeClientTransport};
-use store::{PROTOCOL_ID, game_state::GameEvent, player::Player, utils::to_netcode_user_data};
+use store::{PROTOCOL_ID, game_state::GameEvent, utils::to_netcode_user_data};
 
 use crate::{game::GameScene, main_menu::MainMenuScene};
 
@@ -39,7 +39,13 @@ impl Scene {
     pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
         match self {
             Scene::Menu(menu) => menu.handle_input(key_event),
-            Scene::Game(game) => game.handle_input(key_event),
+            Scene::Game(game_scene) => game_scene.handle_input(key_event),
+        }
+    }
+    pub fn handle_event(&mut self, game_event: GameEvent) {
+        match self {
+            Scene::Menu(menu) => todo!(),
+            Scene::Game(game_scene) => game_scene.handle_server_events(game_event),
         }
     }
 }
@@ -51,19 +57,18 @@ pub struct App {
 }
 
 // events that can trigger re-render in client
-// TODO: change name
-pub enum ClientEvent {
+pub enum ChannelMessage {
     Input(crossterm::event::KeyEvent),
     ServerMessage(GameEvent),
     // ClientMessage(GameEvent),
 }
 
 // main thread - TUI rendering on input updates
-fn handle_input_events(tx: mpsc::Sender<ClientEvent>) {
+fn handle_input_events(tx: mpsc::Sender<ChannelMessage>) {
     loop {
         match crossterm::event::read().unwrap() {
             crossterm::event::Event::Key(key_event) => {
-                tx.send(ClientEvent::Input(key_event)).unwrap()
+                tx.send(ChannelMessage::Input(key_event)).unwrap()
             }
             _ => {}
         }
@@ -71,9 +76,9 @@ fn handle_input_events(tx: mpsc::Sender<ClientEvent>) {
 }
 // atm, receives messages from the server and sends them back to the main thread to do the re-rendering
 // TODO: client should be able to send messages to the server (communicate own's moves)
-fn run_net_thread(tx: mpsc::Sender<ClientEvent>, username: String, address: String) {
+fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: String) {
     let SERVER_ADDR: SocketAddr = address.parse().unwrap();
-    const CLIENT_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
+    let CLIENT_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
 
     let socket = UdpSocket::bind(CLIENT_ADDR).unwrap();
     let current_time = SystemTime::now()
@@ -112,7 +117,7 @@ fn run_net_thread(tx: mpsc::Sender<ClientEvent>, username: String, address: Stri
                 // .... if we can deserialize it as a game event....
                 match postcard::from_bytes::<GameEvent>(&message) {
                     // .... we send it to the main thread to be handled
-                    Ok(game_event) => tx.send(ClientEvent::ServerMessage(game_event)).unwrap(),
+                    Ok(game_event) => tx.send(ChannelMessage::ServerMessage(game_event)).unwrap(),
                     _ => (),
                 }
             }
@@ -133,12 +138,12 @@ impl App {
     pub fn run(
         &mut self,
         terminal: &mut DefaultTerminal,
-        rx: mpsc::Receiver<ClientEvent>,
-        tx: mpsc::Sender<ClientEvent>,
+        rx: mpsc::Receiver<ChannelMessage>,
+        tx: mpsc::Sender<ChannelMessage>,
     ) -> io::Result<()> {
         while !self.exit {
             match rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(ClientEvent::Input(key_event)) => {
+                Ok(ChannelMessage::Input(key_event)) => {
                     if key_event.kind == KeyEventKind::Press {
                         if key_event.code == KeyCode::Char('q') {
                             self.exit();
@@ -147,11 +152,11 @@ impl App {
                                 SceneTransition::None => {}
                                 SceneTransition::ToGame(username, address) => {
                                     // communicate to the server...
+                                    self.current_scene = Scene::Game(GameScene::new());
                                     let tx_to_net_thread = tx.clone();
                                     thread::spawn(move || {
                                         run_net_thread(tx_to_net_thread, username, address);
                                     });
-                                    // self.current_scene = Scene::Game(GameScene::new())
                                 }
                                 SceneTransition::ToMenu => {
                                     self.current_scene = Scene::Menu(MainMenuScene::new())
@@ -160,8 +165,8 @@ impl App {
                         }
                     }
                 }
-                Ok(ClientEvent::ServerMessage(bytes)) => {
-                    info!("{:?}", bytes);
+                Ok(ChannelMessage::ServerMessage(game_event)) => {
+                    self.current_scene.handle_event(game_event);
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     info!("channel closed, exiting...");
@@ -218,7 +223,7 @@ fn main() -> io::Result<()> {
         .filter_level(LevelFilter::Info) // Show all logs
         .init();
 
-    let (event_tx, event_rx) = mpsc::channel::<ClientEvent>();
+    let (event_tx, event_rx) = mpsc::channel::<ChannelMessage>();
     let tx_to_input_events = event_tx.clone();
     thread::spawn(move || {
         handle_input_events(tx_to_input_events);
