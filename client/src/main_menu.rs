@@ -1,11 +1,12 @@
 use cli_log::info;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Constraint, Layout, Margin, Rect},
+    layout::{Constraint, Flex, Layout, Margin, Rect},
     style::{Color, Style},
-    widgets::{Block, Borders, Paragraph, Widget},
+    widgets::{Block, Borders, Clear, Paragraph, Widget},
 };
-use store::player::{Player, PlayerId};
+use store::game_state::GameEvent;
+use throbber_widgets_tui::ASCII;
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 use crate::{Scene, SceneTransition, game::GameScene};
@@ -15,6 +16,8 @@ pub struct MainMenuScene {
     username_in: Input,
     addr_in: Input,
     focused: usize,
+    num_players: usize,
+    // throbber_state: throbber_widgets_tui::ThrobberState,
 }
 
 impl Widget for &MainMenuScene {
@@ -60,7 +63,11 @@ impl Widget for &MainMenuScene {
             .centered()
             .block(Block::default().borders(Borders::ALL))
             .style(if self.focused == 2 {
-                Style::default().bg(Color::Yellow)
+                if self.submit {
+                    Style::default().bg(Color::LightRed)
+                } else {
+                    Style::default().bg(Color::Yellow)
+                }
             } else if self.can_submit() {
                 Style::default().fg(Color::White)
             } else {
@@ -68,6 +75,22 @@ impl Widget for &MainMenuScene {
             });
 
         button.render(chunks[2], buf);
+
+        if self.submit && self.num_players < 2 {
+            let block = Block::bordered().title("Alert");
+            let popup_area = popup_area(area, 60, 20);
+            let simple = throbber_widgets_tui::Throbber::default()
+                .label("Waiting for another player to join...");
+            Clear.render(popup_area, buf);
+            block.render(popup_area, buf);
+            simple.render(
+                popup_area.inner(Margin {
+                    horizontal: 3,
+                    vertical: 3,
+                }),
+                buf,
+            );
+        }
     }
 }
 
@@ -78,10 +101,25 @@ impl MainMenuScene {
             username_in: Input::default().with_value("andrea".into()),
             addr_in: Input::default().with_value("127.0.0.1:5000".into()),
             focused: 2,
+            num_players: 0,
         }
     }
     fn can_submit(&self) -> bool {
         !self.username_in.value().is_empty() && !self.addr_in.value().is_empty()
+    }
+
+    pub fn handle_server_events(&mut self, game_event: GameEvent) -> SceneTransition {
+        match game_event {
+            GameEvent::PlayerJoined { player } => {
+                self.num_players += 1;
+                if self.num_players == 2 {
+                    return SceneTransition::ToGame;
+                } else {
+                    return SceneTransition::None;
+                }
+            }
+            _ => SceneTransition::None,
+        }
     }
 
     pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
@@ -89,7 +127,7 @@ impl MainMenuScene {
             KeyCode::Enter => {
                 if self.can_submit() && self.focused == 2 {
                     self.submit = true;
-                    SceneTransition::ToGame(
+                    SceneTransition::ToLobby(
                         String::from(self.username_in.value()),
                         String::from(self.addr_in.value()),
                     )
@@ -122,4 +160,13 @@ impl MainMenuScene {
             },
         }
     }
+}
+
+/// helper function to create a centered rect using up certain percentage of the available rect `r`
+fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
 }

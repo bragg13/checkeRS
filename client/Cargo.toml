@@ -16,3 +16,4 @@ renet_netcode = "2.0.0"
 tui-input = "0.15.0"
 serde = { version = "1.0", features = ["derive"] }
 postcard = "1.0"
+throbber-widgets-tui = "0.10.0"
