@@ -1,4 +1,3 @@
-use cli_log::info;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Constraint::Length, style::Stylize};
 use std::collections::HashMap;
@@ -33,10 +32,18 @@ pub struct GameScene {
 }
 
 impl GameScene {
-    pub fn new(players: HashMap<PlayerId, Player>, player_id: PlayerId) -> Self {
+    pub fn new(
+        players: HashMap<PlayerId, Player>,
+        player_id: PlayerId,
+        starting_player: PlayerId,
+    ) -> Self {
+        let player = players.get(&player_id).unwrap();
         Self {
-            game_state: GameState::new(Some(players.clone())),
-            cursor_cell: Coords { x: 0, y: 0 },
+            game_state: GameState::new(players.clone(), starting_player),
+            cursor_cell: Coords {
+                x: 0,
+                y: if player.direction == 1 { 0 } else { 7 },
+            },
             selected_cell: None,
             player_id,
             possible_moves: vec![],
@@ -92,7 +99,7 @@ impl GameScene {
                 .iter()
                 .find(|possible_move| possible_move.to() == self.cursor_cell);
             match selected_move {
-                Some(mv) => {
+                Some(_mv) => {
                     // move selected pawn to selected cell
                     let event = GameEvent::Move {
                         mv: selected_move.unwrap().clone(),

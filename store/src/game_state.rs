@@ -24,11 +24,11 @@ pub struct GameState {
     history: Vec<GameEvent>,
 }
 impl GameState {
-    pub fn new(players: Option<HashMap<PlayerId, Player>>) -> Self {
+    pub fn new(players: HashMap<PlayerId, Player>, starting_turn: PlayerId) -> Self {
         Self {
             grid: Board::new(),
-            is_turn: 1,
-            players: players.unwrap_or(HashMap::new()),
+            is_turn: starting_turn,
+            players: players,
             history: vec![],
         }
     }
@@ -56,8 +56,8 @@ impl GameState {
                     return false;
                 }
             }
-            GameEvent::Move { mv, player_id } => todo!(),
-            GameEvent::TurnChanged { player_id } => todo!(),
+            _ => {} // GameEvent::Move { mv, player_id } => todo!(),
+                    // GameEvent::TurnChanged { player_id } => todo!(),
         }
         true
     }

@@ -24,7 +24,7 @@ use renet_netcode::{ClientAuthentication, NetcodeClientTransport};
 use store::{
     PROTOCOL_ID,
     game_state::GameEvent,
-    player::{self, Player, PlayerId},
+    player::{Player, PlayerId},
     utils::to_netcode_user_data,
 };
 
@@ -38,7 +38,7 @@ pub enum Scene {
 #[derive(Debug)]
 pub enum SceneTransition {
     None,
-    ToGame(HashMap<PlayerId, Player>),
+    ToGame(HashMap<PlayerId, Player>, PlayerId),
     ToMenu,
     ToLobby(String, String),
 }
@@ -53,6 +53,12 @@ impl Scene {
         match self {
             Scene::Menu(menu) => menu.handle_server_events(game_event),
             Scene::Game(game_scene) => game_scene.handle_server_events(game_event),
+        }
+    }
+    pub fn handle_render(&self, area: Rect, buf: &mut Buffer) {
+        match self {
+            Scene::Menu(main_menu_scene) => main_menu_scene.render(area, buf),
+            Scene::Game(game_scene) => game_scene.render(area, buf),
         }
     }
 }
@@ -85,16 +91,16 @@ fn handle_input_events(tx: mpsc::Sender<ChannelMessage>) {
 // atm, receives messages from the server and sends them back to the main thread to do the re-rendering
 // TODO: client should be able to send messages to the server (communicate own's moves)
 fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: String) {
-    let SERVER_ADDR: SocketAddr = match address.parse() {
+    let server_addr: SocketAddr = match address.parse() {
         Ok(addr) => addr,
         Err(e) => {
             info!("❌ Invalid address '{}': {}", address, e);
             return;
         }
     };
-    let CLIENT_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
+    let client_addr: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
 
-    let socket = match UdpSocket::bind(CLIENT_ADDR) {
+    let socket = match UdpSocket::bind(client_addr) {
         Ok(s) => s,
         Err(e) => {
             info!("❌ Failed to bind socket: {}", e);
@@ -118,7 +124,7 @@ fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: S
     let auth = ClientAuthentication::Unsecure {
         client_id,
         protocol_id: PROTOCOL_ID,
-        server_addr: SERVER_ADDR,
+        server_addr: server_addr,
         user_data: Some(to_netcode_user_data(username)),
     };
 
@@ -192,6 +198,7 @@ impl App {
         tx: mpsc::Sender<ChannelMessage>,
     ) -> io::Result<()> {
         while !self.exit {
+            // matching events read from a thread channel, ie. coming from input handling, server messages, or internal inter-thread communication
             match rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(ChannelMessage::Input(key_event)) => {
                     if key_event.kind == KeyEventKind::Press {
@@ -199,36 +206,38 @@ impl App {
                             self.exit();
                         } else {
                             match self.current_scene.handle_input(key_event) {
+                                // pressing enter in the main menu triggers going to lobby
                                 SceneTransition::ToLobby(username, address) => {
                                     let tx_to_net_thread = tx.clone();
                                     thread::spawn(move || {
                                         run_net_thread(tx_to_net_thread, username, address);
                                     });
                                 }
-                                SceneTransition::ToMenu => {
-                                    self.current_scene = Scene::Menu(MainMenuScene::new()) // after game is finished
-                                }
-                                SceneTransition::ToGame(players) => {
-                                    // self.current_scene = Scene::Game(GameScene::new(players, self.)); // after two players join the lobby
-                                }
-                                SceneTransition::None => {}
+                                // not yet implemented, but will be triggered from pressing a button 'start new game'
+                                // SceneTransition::ToMenu => {
+                                //     self.current_scene = Scene::Menu(MainMenuScene::new()) // after game is finished
+                                // }
+                                _ => {}
                             }
                         }
                     }
                 }
                 Ok(ChannelMessage::ClientIdCommunication(client_id)) => self.player_id = client_id,
                 Ok(ChannelMessage::ServerMessage(game_event)) => {
-                    // this can get triggered when players join (sever events)
+                    // this can get triggered when players join (server events)
                     match self.current_scene.handle_event(game_event) {
-                        SceneTransition::ToGame(players) => {
-                            self.current_scene =
-                                Scene::Game(GameScene::new(players, self.player_id));
+                        SceneTransition::ToGame(players, starting_player) => {
+                            self.current_scene = Scene::Game(GameScene::new(
+                                players,
+                                self.player_id,
+                                starting_player,
+                            ));
                         }
                         _ => {}
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    // info!("channel closed, exiting...");
+                    info!("channel closed, exiting...");
                     break;
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -269,11 +278,7 @@ impl Widget for &App {
             .title_bottom(instructions)
             .render(area, buf);
 
-        // TODO: can maybe move to Scene impl?
-        match &self.current_scene {
-            Scene::Menu(main_menu_scene) => main_menu_scene.render(area, buf),
-            Scene::Game(game_scene) => game_scene.render(area, buf),
-        }
+        self.current_scene.handle_render(area, buf);
     }
 }
 

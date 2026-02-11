@@ -1,21 +1,20 @@
 use cli_log::info;
 use renet::{ConnectionConfig, DefaultChannel, RenetServer, ServerEvent};
-use renet_netcode::{
-    ClientAuthentication, NetcodeServerTransport, ServerAuthentication, ServerConfig,
-};
+use renet_netcode::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::time::{Duration, Instant, SystemTime};
-use store::game_state::{self, GameEvent, GameState};
+use store::PROTOCOL_ID;
+use store::game_state::{GameEvent, GameState};
 use store::player::{Player, PlayerId};
 use store::utils::from_user_data;
-use store::{CHANNEL_ID, PROTOCOL_ID};
 
 fn main() {
     env_logger::Builder::from_default_env()
         .filter_level(cli_log::LevelFilter::Info) // Show all logs
         .init();
     let mut server = RenetServer::new(ConnectionConfig::default());
-    let mut game_state = GameState::new(None);
+    let mut game_state: Option<GameState> = None;
 
     // Setup transport layer using renet_netcode
     const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 5000);
@@ -31,6 +30,8 @@ fn main() {
     };
     let mut transport = NetcodeServerTransport::new(server_config, socket).unwrap();
     let mut last_updated = Instant::now();
+    let mut starting_player_id: Option<PlayerId> = None;
+    let mut players = HashMap::new();
     info!("🕹 server listening on {}", SERVER_ADDR);
 
     loop {
@@ -48,15 +49,18 @@ fn main() {
                     let user_data = transport.user_data(client_id).unwrap();
                     let username = from_user_data(&user_data);
                     info!("Client connected! {} with username {}", client_id, username);
+                    if server.connected_clients() < 2 {
+                        starting_player_id = Some(client_id);
+                    }
 
                     // notify all players that a new player joined
                     let player = Player {
                         id: client_id as PlayerId,
                         name: username,
-                        direction: if server.connected_clients() == 2 {
-                            -1
-                        } else {
+                        direction: if starting_player_id.is_some_and(|id| id == client_id) {
                             1
+                        } else {
+                            -1
                         },
                         score: 0,
                     };
@@ -67,23 +71,29 @@ fn main() {
                     info!("broadcasting that a new player {} joined...", player.name);
                     server.broadcast_message(DefaultChannel::ReliableOrdered, bytes);
 
-                    // if this is the second player to connect, also notiufy him about the first one
-                    if server.connected_clients() == 2 {
-                        for prev_client in game_state.players.iter() {
-                            let joined_event = GameEvent::PlayerJoined {
-                                player: prev_client.1.clone(), // TODO: probably not the best
-                            };
-                            let bytes = postcard::to_allocvec(&joined_event).unwrap();
-                            server.send_message(client_id, DefaultChannel::ReliableOrdered, bytes);
-                            info!(
-                                "telling {} that about player {} ...",
-                                prev_client.0, prev_client.1.name
-                            );
-                        }
-                    }
-
                     // add player to game state
-                    game_state.players.insert(client_id, player);
+                    players.insert(client_id, player);
+
+                    // if this is the second player to connect, also notify him about the first one
+                    // TODO: i really doint like this. maybe its better to send the whole players list before game starts?
+                    if server.connected_clients() == 2 {
+                        let prev_player_joined_event = GameEvent::PlayerJoined {
+                            player: players.get(&starting_player_id.unwrap()).unwrap().clone(),
+                        };
+                        let bytes = postcard::to_allocvec(&prev_player_joined_event).unwrap();
+                        server.send_message(client_id, DefaultChannel::ReliableOrdered, bytes); // sending to the newly connected client
+
+                        info!("starting the game...");
+                        let start_game = GameEvent::TurnChanged {
+                            player_id: starting_player_id.unwrap(),
+                        };
+                        let bytes = postcard::to_allocvec(&start_game).unwrap();
+                        server.broadcast_message(DefaultChannel::ReliableOrdered, bytes);
+
+                        // init server state
+                        game_state =
+                            Some(GameState::new(players.clone(), starting_player_id.unwrap()));
+                    }
                 }
                 ServerEvent::ClientDisconnected { client_id, reason } => {
                     info!(":( Client disconnected! {client_id}, reason: {reason}");
@@ -93,7 +103,7 @@ fn main() {
 
         // receive messges from channel
         for client_id in server.clients_id() {
-            // default channel is the one used in the configuration
+            info!("received a move from client {:?}", client_id);
         }
 
         transport.send_packets(&mut server);

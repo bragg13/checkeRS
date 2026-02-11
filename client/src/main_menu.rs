@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use cli_log::info;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Flex, Layout, Margin, Rect},
@@ -13,7 +12,7 @@ use store::{
 };
 use tui_input::{Input, backend::crossterm::EventHandler};
 
-use crate::{Scene, SceneTransition, game::GameScene};
+use crate::SceneTransition;
 #[derive(Debug)]
 pub struct MainMenuScene {
     pub players: HashMap<PlayerId, Player>, // could make sense if i wanted to show players list in lobby...?
@@ -117,12 +116,10 @@ impl MainMenuScene {
         match game_event {
             GameEvent::PlayerJoined { player } => {
                 self.players.insert(player.id, player);
-                if self.players.len() == 2 {
-                    // info!("starting game...");
-                    return SceneTransition::ToGame(self.players.clone());
-                } else {
-                    return SceneTransition::None;
-                }
+                return SceneTransition::None;
+            }
+            GameEvent::TurnChanged { player_id } => {
+                SceneTransition::ToGame(self.players.clone(), player_id)
             }
             _ => SceneTransition::None,
         }
