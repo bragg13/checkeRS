@@ -24,7 +24,7 @@ use renet_netcode::{ClientAuthentication, NetcodeClientTransport};
 use store::{
     PROTOCOL_ID,
     game_state::GameEvent,
-    player::{Player, PlayerId},
+    player::{self, Player, PlayerId},
     utils::to_netcode_user_data,
 };
 
@@ -61,13 +61,14 @@ impl Scene {
 pub struct App {
     exit: bool,
     current_scene: Scene,
+    player_id: PlayerId,
 }
 
 // events that can trigger re-render in client
 pub enum ChannelMessage {
     Input(crossterm::event::KeyEvent),
     ServerMessage(GameEvent),
-    // ClientMessage(GameEvent),
+    ClientIdCommunication(PlayerId),
 }
 
 // main thread - TUI rendering on input updates
@@ -105,6 +106,13 @@ fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: S
         .unwrap();
 
     let client_id = ClientId::from(current_time.as_millis() as u64);
+    if tx
+        .send(ChannelMessage::ClientIdCommunication(client_id))
+        .is_err()
+    {
+        info!("❌ Failed to communicate client id to main thread");
+        return;
+    }
     let mut client = RenetClient::new(ConnectionConfig::default());
 
     let auth = ClientAuthentication::Unsecure {
@@ -173,6 +181,7 @@ impl App {
         Self {
             exit: false,
             current_scene: Scene::Menu(MainMenuScene::new()),
+            player_id: 0,
         }
     }
 
@@ -200,18 +209,20 @@ impl App {
                                     self.current_scene = Scene::Menu(MainMenuScene::new()) // after game is finished
                                 }
                                 SceneTransition::ToGame(players) => {
-                                    self.current_scene = Scene::Game(GameScene::new(players)); // after two players join the lobby
+                                    // self.current_scene = Scene::Game(GameScene::new(players, self.)); // after two players join the lobby
                                 }
                                 SceneTransition::None => {}
                             }
                         }
                     }
                 }
+                Ok(ChannelMessage::ClientIdCommunication(client_id)) => self.player_id = client_id,
                 Ok(ChannelMessage::ServerMessage(game_event)) => {
                     // this can get triggered when players join (sever events)
                     match self.current_scene.handle_event(game_event) {
                         SceneTransition::ToGame(players) => {
-                            self.current_scene = Scene::Game(GameScene::new(players));
+                            self.current_scene =
+                                Scene::Game(GameScene::new(players, self.player_id));
                         }
                         _ => {}
                     }

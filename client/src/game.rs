@@ -1,3 +1,4 @@
+use cli_log::info;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Constraint::Length, style::Stylize};
 use std::collections::HashMap;
@@ -32,12 +33,12 @@ pub struct GameScene {
 }
 
 impl GameScene {
-    pub fn new(players: HashMap<PlayerId, Player>) -> Self {
+    pub fn new(players: HashMap<PlayerId, Player>, player_id: PlayerId) -> Self {
         Self {
             game_state: GameState::new(Some(players.clone())),
             cursor_cell: Coords { x: 0, y: 0 },
             selected_cell: None,
-            player_id: 0,
+            player_id,
             possible_moves: vec![],
         }
     }
@@ -127,7 +128,16 @@ impl Widget for &GameScene {
         // info area // TODO
         let mut players_scoreboard = vec![];
         for player in self.game_state.players.iter() {
-            players_scoreboard.push(player.1.pretty_print_scoreboard().left_aligned());
+            players_scoreboard.push(
+                player
+                    .1
+                    .pretty_print_scoreboard(if player.1.id == self.player_id {
+                        Color::Green
+                    } else {
+                        Color::Red
+                    })
+                    .left_aligned(),
+            );
         }
         Paragraph::new(players_scoreboard).render(info_area, buf);
 

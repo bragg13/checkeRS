@@ -1,4 +1,7 @@
-use ratatui::{style::Stylize, text::Line};
+use ratatui::{
+    style::{Color, Stylize},
+    text::Line,
+};
 use serde::{Deserialize, Serialize};
 
 pub type PlayerId = u64;
@@ -12,11 +15,12 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn pretty_print_scoreboard(&self) -> Line<'static> {
+    pub fn pretty_print_scoreboard(&self, name_color: Color) -> Line<'static> {
         Line::from(vec![
-            format!("{}", self.name).green(),
+            format!("{}", self.name).fg(name_color),
             format!(" score:").white(),
             format!(" {}", self.score).white().bold(),
+            format!(" ({})", self.direction).white().bold(),
         ])
     }
 }
