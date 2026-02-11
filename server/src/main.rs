@@ -103,7 +103,19 @@ fn main() {
 
         // receive messges from channel
         for client_id in server.clients_id() {
-            info!("received a move from client {:?}", client_id);
+            if let Some(bytes) = server.receive_message(client_id, DefaultChannel::ReliableOrdered)
+            {
+                match postcard::from_bytes::<GameEvent>(&bytes) {
+                    Ok(msg) => {
+                        if let Some(state) = &mut game_state {
+                            state.dispatch(&msg).unwrap();
+                        }
+                    }
+                    Err(err) => {
+                        info!("Error while desearilizing client message: {}", err);
+                    }
+                }
+            }
         }
 
         transport.send_packets(&mut server);
