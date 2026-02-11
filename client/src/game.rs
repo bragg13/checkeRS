@@ -64,7 +64,7 @@ impl GameScene {
         SceneTransition::None
     }
     pub fn handle_server_events(&mut self, game_event: GameEvent) -> SceneTransition {
-        self.game_state.reduce(&game_event);
+        self.game_state.reduce(&game_event).unwrap(); // this applies the server update to the client (BLINDLY as im using reduce)
         SceneTransition::None
     }
     fn left(&mut self) {
