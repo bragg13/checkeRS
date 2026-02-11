@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Error};
 
 use serde::{Deserialize, Serialize};
 
@@ -33,36 +33,47 @@ impl GameState {
         }
     }
 
-    pub fn dispatch(&mut self, event: &GameEvent) -> Result<(), ()> {
-        if !self.validate(event) {
-            return Err(());
-        }
-        self.reduce(event);
+    pub fn dispatch(&mut self, event: &GameEvent) -> Result<(), String> {
+        self.validate(event)?;
+        self.reduce(event)?;
         Ok(())
     }
-    pub fn reduce(&mut self, event: &GameEvent) {
+    pub fn reduce(&mut self, event: &GameEvent) -> Result<(), String> {
         match event {
-            GameEvent::Move { mv, player_id } => self.move_pawn(mv, *player_id),
-            GameEvent::TurnChanged { player_id } => self.is_turn = *player_id,
+            GameEvent::Move { mv, player_id } => {
+                self.move_pawn(mv, *player_id);
+            }
+            GameEvent::TurnChanged { player_id } => {
+                self.is_turn = *player_id;
+            }
             GameEvent::PlayerJoined { .. } => {}
         }
         self.history.push(event.clone());
+        Ok(())
     }
 
-    pub fn validate(&self, event: &GameEvent) -> bool {
+    pub fn validate(&self, event: &GameEvent) -> Result<(), String> {
         match event {
             GameEvent::PlayerJoined { player } => {
                 if self.players.contains_key(&player.id) {
-                    return false;
+                    return Err(format!(
+                        "Players list already contains this id: {}",
+                        player.id
+                    ));
                 }
             }
-            _ => {} // GameEvent::Move { mv, player_id } => todo!(),
-                    // GameEvent::TurnChanged { player_id } => todo!(),
+            GameEvent::Move { mv, player_id } => {
+                if self.is_turn != *player_id {
+                    return Err(format!("Not your turn, player {}", player_id));
+                }
+            }
+            _ => {} // GameEvent::TurnChanged { player_id } => todo!(),
         }
-        true
+        Ok(())
     }
 
-    fn move_pawn(&mut self, mv: &Move, player_id: PlayerId) {
+    // TODO: catch errors
+    fn move_pawn(&mut self, mv: &Move, player_id: PlayerId) -> Result<(), String> {
         self.grid[mv.to()] = Some(Piece {
             piece_type: PieceType::Pawn,
             player_id,
@@ -81,6 +92,6 @@ impl GameState {
                 }
             }
         }
-        //
+        Ok(())
     }
 }
