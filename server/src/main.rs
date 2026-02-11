@@ -108,7 +108,24 @@ fn main() {
                 match postcard::from_bytes::<GameEvent>(&bytes) {
                     Ok(msg) => {
                         if let Some(state) = &mut game_state {
-                            state.dispatch(&msg).unwrap();
+                            match state.dispatch(&msg) {
+                                Ok(_) => {
+                                    // action successful, broadcast to all players
+                                    server
+                                        .broadcast_message(DefaultChannel::ReliableOrdered, bytes); // maybe not the active player? depends on how i handle client-wise
+
+                                    // change of turn
+                                    let bytes = postcard::to_allocvec(&GameEvent::TurnChanged {
+                                        player_id: state.next_turn(),
+                                    })
+                                    .unwrap();
+                                    server
+                                        .broadcast_message(DefaultChannel::ReliableOrdered, bytes);
+                                }
+                                Err(_) => {
+                                    // no action was performed
+                                }
+                            }
                         }
                     }
                     Err(err) => {

@@ -32,6 +32,14 @@ impl GameState {
             history: vec![],
         }
     }
+    pub fn next_turn(&self) -> PlayerId {
+        *self
+            .players
+            .keys()
+            .filter(|id| **id != self.is_turn)
+            .next()
+            .unwrap()
+    }
 
     pub fn dispatch(&mut self, event: &GameEvent) -> Result<(), String> {
         self.validate(event)?;
