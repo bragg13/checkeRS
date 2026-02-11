@@ -42,7 +42,7 @@ impl GameScene {
             game_state: GameState::new(players.clone(), starting_player),
             cursor_cell: Coords {
                 x: 0,
-                y: if player.direction == 1 { 0 } else { 7 },
+                y: if player.direction == -1 { 0 } else { 7 },
             },
             selected_cell: None,
             player_id,
