@@ -12,7 +12,7 @@ use store::{
 };
 use tui_input::{Input, backend::crossterm::EventHandler};
 
-use crate::SceneTransition;
+use crate::ClientEvent;
 #[derive(Debug)]
 pub struct MainMenuScene {
     pub players: HashMap<PlayerId, Player>, // could make sense if i wanted to show players list in lobby...?
@@ -112,54 +112,54 @@ impl MainMenuScene {
         !self.username_in.value().is_empty() && !self.addr_in.value().is_empty()
     }
 
-    pub fn handle_server_events(&mut self, game_event: GameEvent) -> SceneTransition {
+    pub fn handle_server_events(&mut self, game_event: GameEvent) -> Option<ClientEvent> {
         match game_event {
             GameEvent::PlayerJoined { player } => {
                 self.players.insert(player.id, player);
-                return SceneTransition::None;
+                return None;
             }
             GameEvent::TurnChanged { player_id } => {
-                SceneTransition::ToGame(self.players.clone(), player_id)
+                Some(ClientEvent::GoToGame(self.players.clone(), player_id))
             }
-            _ => SceneTransition::None,
+            _ => None,
         }
     }
 
-    pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
+    pub fn handle_input(&mut self, key_event: KeyEvent) -> Option<ClientEvent> {
         match key_event.code {
             KeyCode::Enter => {
                 if self.can_submit() && self.focused == 2 {
                     self.submit = true;
-                    SceneTransition::ToLobby(
+                    Some(ClientEvent::GoToLobby(
                         String::from(self.username_in.value()),
                         String::from(self.addr_in.value()),
-                    )
+                    ))
                 } else {
-                    SceneTransition::None
+                    return None;
                 }
             }
             KeyCode::Down => {
                 if self.focused < 2 {
                     self.focused += 1
                 }
-                SceneTransition::None
+                return None;
             }
             KeyCode::Up => {
                 if self.focused > 0 {
                     self.focused -= 1
                 }
-                SceneTransition::None
+                return None;
             }
             _ => match self.focused {
                 0 => {
                     self.username_in.handle_event(&Event::Key(key_event));
-                    SceneTransition::None
+                    return None;
                 }
                 1 => {
                     self.addr_in.handle_event(&Event::Key(key_event));
-                    SceneTransition::None
+                    return None;
                 }
-                _ => SceneTransition::None,
+                _ => return None,
             },
         }
     }

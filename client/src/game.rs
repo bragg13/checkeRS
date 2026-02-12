@@ -20,7 +20,7 @@ use store::{
     player::{Player, PlayerId},
 };
 
-use crate::SceneTransition;
+use crate::ClientEvent;
 
 #[derive(Debug)]
 pub struct GameScene {
@@ -49,23 +49,26 @@ impl GameScene {
             possible_moves: vec![],
         }
     }
-    pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
+    pub fn handle_input(&mut self, key_event: KeyEvent) -> Option<ClientEvent> {
         if self.game_state.players.len() < 2 {
-            return SceneTransition::None;
+            return None;
         }
-        match key_event.code {
-            KeyCode::Left => self.left(),
-            KeyCode::Down => self.down(),
-            KeyCode::Up => self.up(),
-            KeyCode::Right => self.right(),
-            KeyCode::Char(' ') => self.select(),
-            _ => {}
+        if key_event.code == KeyCode::Char(' ') {
+            return self.select();
+        } else {
+            match key_event.code {
+                KeyCode::Left => self.left(),
+                KeyCode::Down => self.down(),
+                KeyCode::Up => self.up(),
+                KeyCode::Right => self.right(),
+                _ => {}
+            }
+            return None;
         }
-        SceneTransition::None
     }
-    pub fn handle_server_events(&mut self, game_event: GameEvent) -> SceneTransition {
+    pub fn handle_server_events(&mut self, game_event: GameEvent) -> Option<ClientEvent> {
         self.game_state.reduce(&game_event).unwrap(); // this applies the server update to the client (BLINDLY as im using reduce)
-        SceneTransition::None
+        return None;
     }
     fn left(&mut self) {
         if self.cursor_cell.x != 0 {
@@ -87,9 +90,9 @@ impl GameScene {
             self.cursor_cell.x += 1;
         }
     }
-    fn select(&mut self) {
+    fn select(&mut self) -> Option<ClientEvent> {
         if !is_white(self.cursor_cell) {
-            return;
+            return None;
         }
 
         // selecting empty cell
@@ -101,13 +104,14 @@ impl GameScene {
             match selected_move {
                 Some(_mv) => {
                     // move selected pawn to selected cell
-                    let event = GameEvent::Move {
+                    return Some(ClientEvent::SendToServer(GameEvent::Move {
                         mv: selected_move.unwrap().clone(),
                         player_id: self.player_id,
-                    };
-                    self.game_state.dispatch(&event).unwrap();
-                    self.possible_moves.clear();
-                    self.selected_cell = None;
+                    }));
+
+                    // self.game_state.dispatch(&event).unwrap(); // this would be for single player
+                    // self.possible_moves.clear();
+                    // self.selected_cell = None;
                 }
                 None => {}
             }
@@ -123,6 +127,7 @@ impl GameScene {
             );
             self.possible_moves = moves;
         }
+        return None;
     }
 }
 

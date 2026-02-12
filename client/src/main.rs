@@ -36,20 +36,20 @@ pub enum Scene {
     Game(GameScene),
 }
 #[derive(Debug)]
-pub enum SceneTransition {
-    None,
-    ToGame(HashMap<PlayerId, Player>, PlayerId),
-    ToMenu,
-    ToLobby(String, String),
+pub enum ClientEvent {
+    GoToGame(HashMap<PlayerId, Player>, PlayerId),
+    GoToMenu,
+    GoToLobby(String, String),
+    SendToServer(GameEvent),
 }
 impl Scene {
-    pub fn handle_input(&mut self, key_event: KeyEvent) -> SceneTransition {
+    pub fn handle_input(&mut self, key_event: KeyEvent) -> Option<ClientEvent> {
         match self {
             Scene::Menu(menu) => menu.handle_input(key_event),
             Scene::Game(game_scene) => game_scene.handle_input(key_event),
         }
     }
-    pub fn handle_event(&mut self, game_event: GameEvent) -> SceneTransition {
+    pub fn handle_event(&mut self, game_event: GameEvent) -> Option<ClientEvent> {
         match self {
             Scene::Menu(menu) => menu.handle_server_events(game_event),
             Scene::Game(game_scene) => game_scene.handle_server_events(game_event),
@@ -68,29 +68,39 @@ pub struct App {
     exit: bool,
     current_scene: Scene,
     player_id: PlayerId,
+    main_to_network_tx: Option<mpsc::Sender<ClientToServerMessage>>,
 }
 
-// events that can trigger re-render in client
-pub enum ChannelMessage {
+// cliewnt has to handle this; can come from server or input; is sent via thread channel
+pub enum IncomingEvent {
     Input(crossterm::event::KeyEvent),
     ServerMessage(GameEvent),
     ClientIdCommunication(PlayerId),
 }
 
-// main thread - TUI rendering on input updates
-fn handle_input_events(tx: mpsc::Sender<ChannelMessage>) {
+// events that the client can send to the server
+pub enum ClientToServerMessage {
+    SendEvent(GameEvent),
+    Disconnect, // this could be a game event maybe
+}
+
+fn handle_input_events(tx: mpsc::Sender<IncomingEvent>) {
     loop {
         match crossterm::event::read().unwrap() {
             crossterm::event::Event::Key(key_event) => {
-                tx.send(ChannelMessage::Input(key_event)).unwrap()
+                tx.send(IncomingEvent::Input(key_event)).unwrap()
             }
             _ => {}
         }
     }
 }
-// atm, receives messages from the server and sends them back to the main thread to do the re-rendering
-// TODO: client should be able to send messages to the server (communicate own's moves)
-fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: String) {
+
+fn run_net_thread(
+    network_to_main_tx: mpsc::Sender<IncomingEvent>,
+    main_to_network_rx: mpsc::Receiver<ClientToServerMessage>,
+    username: String,
+    address: String,
+) {
     let server_addr: SocketAddr = match address.parse() {
         Ok(addr) => addr,
         Err(e) => {
@@ -112,8 +122,8 @@ fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: S
         .unwrap();
 
     let client_id = ClientId::from(current_time.as_millis() as u64);
-    if tx
-        .send(ChannelMessage::ClientIdCommunication(client_id))
+    if network_to_main_tx
+        .send(IncomingEvent::ClientIdCommunication(client_id))
         .is_err()
     {
         info!("❌ Failed to communicate client id to main thread");
@@ -137,7 +147,6 @@ fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: S
     };
 
     let mut last_updated = Instant::now();
-    // let mut connection_timeout = Instant::now();
 
     loop {
         let now = Instant::now();
@@ -150,18 +159,33 @@ fn run_net_thread(tx: mpsc::Sender<ChannelMessage>, username: String, address: S
             break;
         };
 
-        // whenever we get a message from server...
-        if client.is_connected() {
-            // Reset timeout once connected
-            // connection_timeout = Instant::now();
+        // get Move instruction from input thread and send to server
+        while let Ok(command) = main_to_network_rx.try_recv() {
+            match command {
+                ClientToServerMessage::SendEvent(game_event) => {
+                    match postcard::to_allocvec(&game_event) {
+                        Ok(bytes) => client.send_message(DefaultChannel::ReliableOrdered, bytes),
+                        Err(_) => {
+                            info!("Error while serializing game event")
+                        }
+                    }
+                }
+                ClientToServerMessage::Disconnect => {
+                    return;
+                }
+            }
+        }
 
+        // event from server
+        if client.is_connected() {
             while let Some(message) = client.receive_message(DefaultChannel::ReliableOrdered) {
-                // info!("Received message from server {:?}", message);
-                // .... if we can deserialize it as a game event....
                 match postcard::from_bytes::<GameEvent>(&message) {
                     // .... we send it to the main thread to be handled
                     Ok(game_event) => {
-                        if tx.send(ChannelMessage::ServerMessage(game_event)).is_err() {
+                        if network_to_main_tx
+                            .send(IncomingEvent::ServerMessage(game_event))
+                            .is_err()
+                        {
                             info!("❌ Main thread closed, exiting network thread");
                             break;
                         }
@@ -188,52 +212,80 @@ impl App {
             exit: false,
             current_scene: Scene::Menu(MainMenuScene::new()),
             player_id: 0,
+            main_to_network_tx: None,
         }
     }
 
     pub fn run(
         &mut self,
         terminal: &mut DefaultTerminal,
-        rx: mpsc::Receiver<ChannelMessage>,
-        tx: mpsc::Sender<ChannelMessage>,
+        rx: mpsc::Receiver<IncomingEvent>,
+        tx: mpsc::Sender<IncomingEvent>,
     ) -> io::Result<()> {
         while !self.exit {
             // matching events read from a thread channel, ie. coming from input handling, server messages, or internal inter-thread communication
             match rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(ChannelMessage::Input(key_event)) => {
+                Ok(IncomingEvent::ClientIdCommunication(client_id)) => self.player_id = client_id, // TODO lets find a better way
+                // stuff triggered by input
+                Ok(IncomingEvent::Input(key_event)) => {
                     if key_event.kind == KeyEventKind::Press {
                         if key_event.code == KeyCode::Char('q') {
+                            if let Some(tx) = &self.main_to_network_tx {
+                                // send to network thread via channel
+                                let _ = tx.send(ClientToServerMessage::Disconnect);
+                            }
                             self.exit();
                         } else {
-                            match self.current_scene.handle_input(key_event) {
-                                // pressing enter in the main menu triggers going to lobby
-                                SceneTransition::ToLobby(username, address) => {
-                                    let tx_to_net_thread = tx.clone();
-                                    thread::spawn(move || {
-                                        run_net_thread(tx_to_net_thread, username, address);
-                                    });
+                            if let Some(key_event) = self.current_scene.handle_input(key_event) {
+                                match key_event {
+                                    ClientEvent::GoToLobby(username, address) => {
+                                        // will go to network thread to communicate back server events
+                                        let network_to_main_tx = tx.clone();
+
+                                        // rx will go to network thread to receive client actions to be sent to server
+                                        // tx will go to App, so we can send client actions from later on in the loop
+                                        let (main_to_network_tx, main_to_network_rx) =
+                                            mpsc::channel();
+                                        self.main_to_network_tx = Some(main_to_network_tx);
+
+                                        thread::spawn(move || {
+                                            run_net_thread(
+                                                network_to_main_tx,
+                                                main_to_network_rx,
+                                                username,
+                                                address,
+                                            );
+                                        });
+                                    }
+                                    _ => {}
                                 }
-                                // not yet implemented, but will be triggered from pressing a button 'start new game'
-                                // SceneTransition::ToMenu => {
-                                //     self.current_scene = Scene::Menu(MainMenuScene::new()) // after game is finished
-                                // }
-                                _ => {}
                             }
                         }
                     }
                 }
-                Ok(ChannelMessage::ClientIdCommunication(client_id)) => self.player_id = client_id,
-                Ok(ChannelMessage::ServerMessage(game_event)) => {
-                    // this can get triggered when players join (server events)
-                    match self.current_scene.handle_event(game_event) {
-                        SceneTransition::ToGame(players, starting_player) => {
-                            self.current_scene = Scene::Game(GameScene::new(
-                                players,
-                                self.player_id,
-                                starting_player,
-                            ));
+                // stuff triggered by server payload
+                Ok(IncomingEvent::ServerMessage(msg)) => {
+                    if let Some(game_event) = self.current_scene.handle_event(msg) {
+                        match game_event {
+                            ClientEvent::GoToGame(players, starting_player) => {
+                                self.current_scene = Scene::Game(GameScene::new(
+                                    players,
+                                    self.player_id,
+                                    starting_player,
+                                ))
+                            }
+                            ClientEvent::SendToServer(game_event) => {
+                                if let Some(tx) = &self.main_to_network_tx {
+                                    match tx.send(ClientToServerMessage::SendEvent(game_event)) {
+                                        Ok(_) => {
+                                            // actuate move
+                                        }
+                                        Err(_) => {}
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -287,16 +339,12 @@ fn main() -> io::Result<()> {
         .filter_level(LevelFilter::Info) // Show all logs
         .init();
 
-    let (event_tx, event_rx) = mpsc::channel::<ChannelMessage>();
+    let (event_tx, event_rx) = mpsc::channel::<IncomingEvent>();
     let tx_to_input_events = event_tx.clone();
     thread::spawn(move || {
         handle_input_events(tx_to_input_events);
     });
 
-    // thread::spawn(move || {
-    //     run_net_thread(tx_to_net_thread);
-    // });
-
     // UI takes receiver channel from which other threads communicate
-    ratatui::run(|terminal| App::new().run(terminal, event_rx, event_tx)) // TODO: change the player id
+    ratatui::run(|terminal| App::new().run(terminal, event_rx, event_tx))
 }

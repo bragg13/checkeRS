@@ -49,7 +49,7 @@ impl GameState {
     pub fn reduce(&mut self, event: &GameEvent) -> Result<(), String> {
         match event {
             GameEvent::Move { mv, player_id } => {
-                self.move_pawn(mv, *player_id);
+                self.move_pawn(mv, *player_id)?;
             }
             GameEvent::TurnChanged { player_id } => {
                 self.is_turn = *player_id;
