@@ -98,12 +98,10 @@ impl GameScene {
 
         // selecting empty cell
         if self.game_state.grid[self.cursor_cell].is_none() {
-            info!("yo!");
             let selected_move = self
                 .possible_moves
                 .iter()
                 .find(|possible_move| possible_move.to() == self.cursor_cell);
-            info!("{}", selected_move.unwrap().from().x);
             match selected_move {
                 Some(_mv) => {
                     // move selected pawn to selected cell
@@ -143,7 +141,7 @@ impl Widget for &GameScene {
             Layout::vertical([Constraint::Percentage(8), Constraint::Percentage(92)]).spacing(1);
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
 
-        // info area
+        // info area - TODO: i wanna see first the client name
         let mut players_scoreboard = vec![];
         for player in self.game_state.players.iter() {
             players_scoreboard.push(
