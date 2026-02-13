@@ -184,7 +184,6 @@ impl Widget for &GameScene {
                     y: 5.0,
                     color: if self.game_state.grid[coords]
                         .is_some_and(|x| x.player_id == self.player_id)
-                    // TODO?
                     {
                         Color::Green // player
                     } else {
@@ -194,7 +193,11 @@ impl Widget for &GameScene {
                 };
 
                 let cell_color = if coords == self.cursor_cell {
-                    Color::LightGreen
+                    if self.game_state.is_turn == self.player_id {
+                        Color::LightGreen // not my turn
+                    } else {
+                        Color::Gray
+                    }
                 } else if let Some(selected_cell) = self.selected_cell
                     && coords == selected_cell
                 {
