@@ -128,7 +128,8 @@ impl MainMenuScene {
     pub fn handle_input(&mut self, key_event: KeyEvent) -> Option<ClientEvent> {
         match key_event.code {
             KeyCode::Enter => {
-                if self.can_submit() && self.focused == 2 {
+                if self.can_submit() {
+                    // && self.focused == 2 {
                     self.submit = true;
                     Some(ClientEvent::GoToLobby(
                         String::from(self.username_in.value()),
