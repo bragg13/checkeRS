@@ -54,7 +54,7 @@ impl GameScene {
         if self.game_state.players.len() < 2 {
             return None;
         }
-        if key_event.code == KeyCode::Char(' ') {
+        if key_event.code == KeyCode::Char(' ') && self.game_state.is_turn == self.player_id {
             return self.select();
         } else {
             match key_event.code {
@@ -69,6 +69,8 @@ impl GameScene {
     }
     pub fn handle_server_events(&mut self, game_event: GameEvent) -> Option<ClientEvent> {
         self.game_state.reduce(&game_event).unwrap(); // this applies the server update to the client (BLINDLY as im using reduce)
+        self.possible_moves.clear();
+        self.selected_cell = None;
         return None;
     }
     fn left(&mut self) {
@@ -105,15 +107,12 @@ impl GameScene {
             match selected_move {
                 Some(_mv) => {
                     // move selected pawn to selected cell
-                    info!("Moved");
                     return Some(ClientEvent::SendToServer(GameEvent::Move {
                         mv: selected_move.unwrap().clone(),
                         player_id: self.player_id,
                     }));
 
                     // self.game_state.dispatch(&event).unwrap(); // this would be for single player
-                    // self.possible_moves.clear();
-                    // self.selected_cell = None;
                 }
                 None => {}
             }
@@ -121,7 +120,6 @@ impl GameScene {
 
         // selecting our own pawn
         if self.game_state.grid[self.cursor_cell].is_some_and(|x| x.player_id == self.player_id) {
-            info!("ohh");
             self.selected_cell = Some(self.cursor_cell);
             let moves = get_possible_moves(
                 &self.game_state.grid,
@@ -129,7 +127,6 @@ impl GameScene {
                 self.game_state.players.get(&self.player_id).unwrap(), // TODO - BREAKS
             );
             self.possible_moves = moves;
-            info!("selected");
         }
         return None;
     }
