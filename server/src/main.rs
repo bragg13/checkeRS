@@ -11,7 +11,7 @@ use store::utils::from_user_data;
 
 fn main() {
     env_logger::Builder::from_default_env()
-        .filter_level(cli_log::LevelFilter::Info) // Show all logs
+        .filter_level(cli_log::LevelFilter::Info)
         .init();
     let mut server = RenetServer::new(ConnectionConfig::default());
     let mut game_state: Option<GameState> = None;
@@ -40,7 +40,6 @@ fn main() {
         last_updated = now;
         server.update(duration);
         transport.update(duration, &mut server).unwrap();
-        // info!("🕹 server looping...");
 
         // handles events
         while let Some(event) = server.get_event() {
@@ -108,9 +107,14 @@ fn main() {
                 match postcard::from_bytes::<GameEvent>(&bytes) {
                     Ok(msg) => {
                         if let Some(state) = &mut game_state {
+                            // received a msg from client, try to dispatch it as a game event
+                            info!("ℹ️ Received from client {client_id} a message: {:?}", msg);
                             match state.dispatch(&msg) {
                                 Ok(_) => {
                                     // action successful, broadcast to all players
+                                    info!(
+                                        "✅ Action was correctly dispatched! Broadcasting to players..."
+                                    );
                                     server
                                         .broadcast_message(DefaultChannel::ReliableOrdered, bytes); // maybe not the active player? depends on how i handle client-wise
 
@@ -121,6 +125,7 @@ fn main() {
                                     .unwrap();
                                     server
                                         .broadcast_message(DefaultChannel::ReliableOrdered, bytes);
+                                    info!("🔄 Broadcasting change of turn to players...");
                                 }
                                 Err(_) => {
                                     // no action was performed
@@ -129,7 +134,7 @@ fn main() {
                         }
                     }
                     Err(err) => {
-                        info!("Error while desearilizing client message: {}", err);
+                        info!(" ❌ Error while desearilizing client message: {}", err);
                     }
                 }
             }
