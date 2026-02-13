@@ -23,7 +23,7 @@ impl Player {
         Line::from(vec![
             format!(
                 "{}{}",
-                if self.id == is_playing { "(*)" } else { "" },
+                if self.id == is_playing { "> " } else { "" },
                 self.name
             )
             .fg(name_color),
