@@ -257,6 +257,19 @@ impl App {
                                             );
                                         });
                                     }
+                                    // when selecting a cell to move to as a client
+                                    ClientEvent::SendToServer(game_event) => {
+                                        if let Some(tx) = &self.main_to_network_tx {
+                                            match tx
+                                                .send(ClientToServerMessage::SendEvent(game_event))
+                                            {
+                                                Ok(_) => {
+                                                    // actuate move
+                                                }
+                                                Err(_) => {}
+                                            }
+                                        }
+                                    }
                                     _ => {}
                                 }
                             }
@@ -273,16 +286,6 @@ impl App {
                                     self.player_id,
                                     starting_player,
                                 ))
-                            }
-                            ClientEvent::SendToServer(game_event) => {
-                                if let Some(tx) = &self.main_to_network_tx {
-                                    match tx.send(ClientToServerMessage::SendEvent(game_event)) {
-                                        Ok(_) => {
-                                            // actuate move
-                                        }
-                                        Err(_) => {}
-                                    }
-                                }
                             }
                             _ => {}
                         }
