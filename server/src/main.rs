@@ -31,7 +31,7 @@ fn main() {
     let mut transport = NetcodeServerTransport::new(server_config, socket).unwrap();
     let mut last_updated = Instant::now();
     let mut starting_player_id: Option<PlayerId> = None;
-    let mut players = HashMap::new();
+    let mut players: HashMap<PlayerId, Player> = HashMap::new();
     info!("🕹 server listening on {}", SERVER_ADDR);
 
     loop {
@@ -47,13 +47,28 @@ fn main() {
                 ServerEvent::ClientConnected { client_id } => {
                     let user_data = transport.user_data(client_id).unwrap();
                     let username = from_user_data(&user_data);
-                    info!("Client connected! {} with username {}", client_id, username);
+                    info!(
+                        "🥳 Client connected! {} with username {}",
+                        client_id, username
+                    );
                     if server.connected_clients() < 2 {
                         starting_player_id = Some(client_id);
                     }
 
-                    // notify all players that a new player joined
-                    let player = Player {
+                    // communicate to the new player all the previous ones - could be simplified for two players only...
+                    for (_player_id, player) in players.iter() {
+                        let event = GameEvent::PlayerJoined {
+                            player: player.clone(),
+                        };
+                        server.send_message(
+                            client_id,
+                            DefaultChannel::ReliableOrdered,
+                            postcard::to_allocvec(&event).unwrap(),
+                        );
+                    }
+
+                    // broadcast new player joined
+                    let new_player = Player {
                         id: client_id as PlayerId,
                         name: username,
                         direction: if starting_player_id.is_some_and(|id| id == client_id) {
@@ -64,77 +79,69 @@ fn main() {
                         score: 0,
                     };
                     let joined_event = GameEvent::PlayerJoined {
-                        player: player.clone(),
+                        player: new_player.clone(),
                     };
-                    let bytes = postcard::to_allocvec(&joined_event).unwrap();
-                    info!("broadcasting that a new player {} joined...", player.name);
-                    server.broadcast_message(DefaultChannel::ReliableOrdered, bytes);
+                    server.broadcast_message(
+                        DefaultChannel::ReliableOrdered,
+                        postcard::to_allocvec(&joined_event).unwrap(),
+                    );
 
-                    // add player to game state
-                    players.insert(client_id, player);
+                    players.insert(client_id, new_player);
 
-                    // if this is the second player to connect, also notify him about the first one
-                    // TODO: i really doint like this. maybe its better to send the whole players list before game starts?
                     if server.connected_clients() == 2 {
-                        let prev_player_joined_event = GameEvent::PlayerJoined {
-                            player: players.get(&starting_player_id.unwrap()).unwrap().clone(),
-                        };
-                        let bytes = postcard::to_allocvec(&prev_player_joined_event).unwrap();
-                        server.send_message(client_id, DefaultChannel::ReliableOrdered, bytes); // sending to the newly connected client
-
-                        info!("starting the game...");
+                        info!("✨ starting the game...");
                         let start_game = GameEvent::TurnChanged {
                             player_id: starting_player_id.unwrap(),
                         };
-                        let bytes = postcard::to_allocvec(&start_game).unwrap();
-                        server.broadcast_message(DefaultChannel::ReliableOrdered, bytes);
-
-                        // init server state
+                        server.broadcast_message(
+                            DefaultChannel::ReliableOrdered,
+                            postcard::to_allocvec(&start_game).unwrap(),
+                        );
                         game_state =
                             Some(GameState::new(players.clone(), starting_player_id.unwrap()));
                     }
                 }
                 ServerEvent::ClientDisconnected { client_id, reason } => {
-                    info!(":( Client disconnected! {client_id}, reason: {reason}");
+                    info!("😢 Client disconnected! {client_id}, reason: {reason}");
                 }
             }
         }
 
-        // receive messges from channel
         for client_id in server.clients_id() {
             if let Some(bytes) = server.receive_message(client_id, DefaultChannel::ReliableOrdered)
             {
                 match postcard::from_bytes::<GameEvent>(&bytes) {
                     Ok(msg) => {
                         if let Some(state) = &mut game_state {
-                            info!("ℹ️  Received from client {client_id} a message: {:?}", msg);
+                            info!("ℹ️ Received from client {client_id} a message: {:?}", msg);
                             match state.dispatch(&msg) {
                                 Ok(_) => {
-                                    // action successful, broadcast to all players
                                     info!(
                                         "✅ Action was correctly dispatched! Broadcasting to players..."
                                     );
                                     server
-                                        .broadcast_message(DefaultChannel::ReliableOrdered, bytes); // maybe not the active player? depends on how i handle client-wise
-
-                                    // change of turn
-                                    let bytes = postcard::to_allocvec(&GameEvent::TurnChanged {
-                                        player_id: state.next_turn(),
-                                    })
-                                    .unwrap();
-                                    server
                                         .broadcast_message(DefaultChannel::ReliableOrdered, bytes);
-                                    info!("🔄 Broadcasting change of turn to players...");
+
+                                    if let Ok(msg) =
+                                        postcard::to_allocvec(&GameEvent::TurnChanged {
+                                            player_id: state.next_turn(),
+                                        })
+                                    {
+                                        server.broadcast_message(
+                                            DefaultChannel::ReliableOrdered,
+                                            msg,
+                                        );
+                                        info!("🔄 Broadcasting change of turn to players...");
+                                    }
                                 }
                                 Err(err) => {
                                     info!("❌ Cannot perform action! {err}");
-                                    // no action was performed
                                 }
                             }
                         }
                     }
                     Err(err) => {
-                        info!(" ❌ Error while desearilizing client message: {}", err);
+                        info!(" ❌ Error while desearilizing client message: {err}");
                     }
                 }
             }

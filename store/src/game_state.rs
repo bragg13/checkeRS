@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use cli_log::info;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -10,9 +11,16 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EndGameReason {
+    PlayerLeft { player_id: PlayerId },
+    PlayerWon { winner: PlayerId },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GameEvent {
     PlayerJoined { player: Player },
     PlayerLeft { player_id: PlayerId },
+    EndGame { reason: EndGameReason },
     TurnChanged { player_id: PlayerId },
     Move { mv: Move, player_id: PlayerId },
 }
@@ -63,6 +71,9 @@ impl GameState {
                 self.players.remove(player_id).unwrap();
                 ()
             }
+            GameEvent::EndGame { reason } => {
+                info!("Game ended: {:?}", reason);
+            }
         }
         self.history.push(event.clone());
         Ok(())
@@ -93,6 +104,7 @@ impl GameState {
                     return Err(format!("Player {player_id} is already playing"));
                 }
             }
+            GameEvent::EndGame { .. } => {}
         }
         Ok(())
     }

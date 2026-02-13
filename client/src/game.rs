@@ -1,4 +1,3 @@
-use cli_log::info;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Constraint::Length, style::Stylize};
 use std::collections::HashMap;

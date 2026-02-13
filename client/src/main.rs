@@ -81,7 +81,7 @@ pub enum IncomingEvent {
 // events that the client can send to the server
 pub enum ClientToServerMessage {
     SendEvent(GameEvent),
-    Disconnect, // this could be a game event maybe
+    // Disconnect, // this could be a game event maybe
 }
 
 fn handle_input_events(tx: mpsc::Sender<IncomingEvent>) {
@@ -169,10 +169,9 @@ fn run_net_thread(
                             info!("Error while serializing game event")
                         }
                     }
-                }
-                ClientToServerMessage::Disconnect => {
-                    return;
-                }
+                } // ClientToServerMessage::Disconnect => {
+                  //     return;
+                  // }
             }
         }
 
@@ -232,7 +231,11 @@ impl App {
                         if key_event.code == KeyCode::Char('q') {
                             if let Some(tx) = &self.main_to_network_tx {
                                 // send to network thread via channel
-                                let _ = tx.send(ClientToServerMessage::Disconnect);
+                                let _ = tx.send(ClientToServerMessage::SendEvent(
+                                    GameEvent::PlayerLeft {
+                                        player_id: self.player_id,
+                                    },
+                                ));
                             }
                             self.exit();
                         } else {
@@ -260,13 +263,11 @@ impl App {
                                     // when selecting a cell to move to as a client
                                     ClientEvent::SendToServer(game_event) => {
                                         if let Some(tx) = &self.main_to_network_tx {
-                                            match tx
+                                            if tx
                                                 .send(ClientToServerMessage::SendEvent(game_event))
+                                                .is_err()
                                             {
-                                                Ok(_) => {
-                                                    // actuate move
-                                                }
-                                                Err(_) => {}
+                                                info!("❌ Something happened...")
                                             }
                                         }
                                     }
@@ -292,7 +293,7 @@ impl App {
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    info!("channel closed, exiting...");
+                    info!("🔌 channel closed, exiting...");
                     break;
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -320,7 +321,7 @@ impl Widget for &App {
         let title = Line::from("Checkers game").centered();
         let instructions = Line::from(vec![
             "Move ".into(),
-            "<Arrows>".blue().bold(),
+            "<Arrows/HJKL>".blue().bold(),
             " Select ".into(),
             "<space>".blue().bold(),
             " Quit ".into(),
