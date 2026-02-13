@@ -12,6 +12,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GameEvent {
     PlayerJoined { player: Player },
+    PlayerLeft { player_id: PlayerId },
     TurnChanged { player_id: PlayerId },
     Move { mv: Move, player_id: PlayerId },
 }
@@ -32,13 +33,16 @@ impl GameState {
             history: vec![],
         }
     }
-    pub fn next_turn(&self) -> PlayerId {
-        *self
+    pub fn next_turn(&mut self) -> PlayerId {
+        // TODO: mi piace usare * ?
+        let next_player = self
             .players
             .keys()
             .filter(|id| **id != self.is_turn)
             .next()
-            .unwrap()
+            .unwrap();
+        self.is_turn = *next_player;
+        *next_player
     }
 
     pub fn dispatch(&mut self, event: &GameEvent) -> Result<(), String> {
@@ -55,6 +59,10 @@ impl GameState {
                 self.is_turn = *player_id;
             }
             GameEvent::PlayerJoined { .. } => {}
+            GameEvent::PlayerLeft { player_id } => {
+                self.players.remove(player_id).unwrap();
+                ()
+            }
         }
         self.history.push(event.clone());
         Ok(())
@@ -75,7 +83,16 @@ impl GameState {
                     return Err(format!("Not your turn, player {}", player_id));
                 }
             }
-            _ => {} // GameEvent::TurnChanged { player_id } => todo!(),
+            GameEvent::PlayerLeft { player_id } => {
+                if !self.players.contains_key(&player_id) {
+                    return Err(format!("Player is not playing: {}", player_id));
+                }
+            }
+            GameEvent::TurnChanged { player_id } => {
+                if self.is_turn == *player_id {
+                    return Err(format!("Player {player_id} is already playing"));
+                }
+            }
         }
         Ok(())
     }

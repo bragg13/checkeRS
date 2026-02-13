@@ -107,8 +107,7 @@ fn main() {
                 match postcard::from_bytes::<GameEvent>(&bytes) {
                     Ok(msg) => {
                         if let Some(state) = &mut game_state {
-                            // received a msg from client, try to dispatch it as a game event
-                            info!("ℹ️ Received from client {client_id} a message: {:?}", msg);
+                            info!("ℹ️  Received from client {client_id} a message: {:?}", msg);
                             match state.dispatch(&msg) {
                                 Ok(_) => {
                                     // action successful, broadcast to all players
@@ -127,7 +126,8 @@ fn main() {
                                         .broadcast_message(DefaultChannel::ReliableOrdered, bytes);
                                     info!("🔄 Broadcasting change of turn to players...");
                                 }
-                                Err(_) => {
+                                Err(err) => {
+                                    info!("❌ Cannot perform action! {err}");
                                     // no action was performed
                                 }
                             }
