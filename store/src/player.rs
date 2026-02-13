@@ -15,9 +15,18 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn pretty_print_scoreboard(&self, name_color: Color) -> Line<'static> {
+    pub fn pretty_print_scoreboard(
+        &self,
+        is_playing: PlayerId,
+        name_color: Color,
+    ) -> Line<'static> {
         Line::from(vec![
-            format!("{}", self.name).fg(name_color),
+            format!(
+                "{}{}",
+                if self.id == is_playing { "(*)" } else { "" },
+                self.name
+            )
+            .fg(name_color),
             format!(" score:").white(),
             format!(" {}", self.score).white().bold(),
             format!(" ({})", self.direction).white().bold(),

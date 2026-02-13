@@ -1,3 +1,4 @@
+use cli_log::info;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Constraint::Length, style::Stylize};
 use std::collections::HashMap;
@@ -97,13 +98,16 @@ impl GameScene {
 
         // selecting empty cell
         if self.game_state.grid[self.cursor_cell].is_none() {
+            info!("yo!");
             let selected_move = self
                 .possible_moves
                 .iter()
                 .find(|possible_move| possible_move.to() == self.cursor_cell);
+            info!("{}", selected_move.unwrap().from().x);
             match selected_move {
                 Some(_mv) => {
                     // move selected pawn to selected cell
+                    info!("Moved");
                     return Some(ClientEvent::SendToServer(GameEvent::Move {
                         mv: selected_move.unwrap().clone(),
                         player_id: self.player_id,
@@ -119,6 +123,7 @@ impl GameScene {
 
         // selecting our own pawn
         if self.game_state.grid[self.cursor_cell].is_some_and(|x| x.player_id == self.player_id) {
+            info!("ohh");
             self.selected_cell = Some(self.cursor_cell);
             let moves = get_possible_moves(
                 &self.game_state.grid,
@@ -126,6 +131,7 @@ impl GameScene {
                 self.game_state.players.get(&self.player_id).unwrap(), // TODO - BREAKS
             );
             self.possible_moves = moves;
+            info!("selected");
         }
         return None;
     }
@@ -137,17 +143,20 @@ impl Widget for &GameScene {
             Layout::vertical([Constraint::Percentage(8), Constraint::Percentage(92)]).spacing(1);
         let [info_area, board_area] = vertical_layout.areas(area.inner(Margin::new(1, 1)));
 
-        // info area // TODO
+        // info area
         let mut players_scoreboard = vec![];
         for player in self.game_state.players.iter() {
             players_scoreboard.push(
                 player
                     .1
-                    .pretty_print_scoreboard(if player.1.id == self.player_id {
-                        Color::Green
-                    } else {
-                        Color::Red
-                    })
+                    .pretty_print_scoreboard(
+                        self.game_state.is_turn,
+                        if player.1.id == self.player_id {
+                            Color::Green
+                        } else {
+                            Color::Red
+                        },
+                    )
                     .left_aligned(),
             );
         }

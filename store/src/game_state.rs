@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Error};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +26,7 @@ pub struct GameState {
 impl GameState {
     pub fn new(players: HashMap<PlayerId, Player>, starting_turn: PlayerId) -> Self {
         Self {
-            grid: Board::new(),
+            grid: Board::new(&players, starting_turn),
             is_turn: starting_turn,
             players: players,
             history: vec![],
@@ -70,7 +70,7 @@ impl GameState {
                     ));
                 }
             }
-            GameEvent::Move { mv, player_id } => {
+            GameEvent::Move { player_id, .. } => {
                 if self.is_turn != *player_id {
                     return Err(format!("Not your turn, player {}", player_id));
                 }

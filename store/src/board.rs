@@ -1,17 +1,28 @@
-use std::ops::{Index, IndexMut};
+use std::{
+    collections::HashMap,
+    ops::{Index, IndexMut},
+};
 
 use crate::{
     CELL_N,
     coords::Coords,
     game_utils::is_white,
     piece::{Piece, PieceType},
+    player::{Player, PlayerId},
 };
 
 #[derive(Debug, Clone)]
 pub struct Board(Vec<Vec<Option<Piece>>>);
 impl Board {
-    pub fn new() -> Self {
+    pub fn new(players: &HashMap<PlayerId, Player>, starting_turn: PlayerId) -> Self {
         let mut grid = vec![vec![None; CELL_N]; CELL_N];
+        // let player1: &Player = players.get(&starting_turn).unwrap();
+        let player2: &Player = players
+            .iter()
+            .filter(|player| *player.0 != starting_turn)
+            .next()
+            .unwrap()
+            .1;
 
         for i in 0..CELL_N {
             for j in 0..CELL_N {
@@ -19,12 +30,12 @@ impl Board {
                 if i < 3 && is_white(coords) {
                     grid[i][j] = Some(Piece {
                         piece_type: PieceType::Pawn,
-                        player_id: 2,
+                        player_id: player2.id,
                     });
                 } else if i > 4 && is_white(coords) {
                     grid[i][j] = Some(Piece {
                         piece_type: PieceType::Pawn,
-                        player_id: 1,
+                        player_id: starting_turn,
                     });
                 } else {
                     grid[i][j] = None;
