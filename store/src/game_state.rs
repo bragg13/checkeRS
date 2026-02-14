@@ -1,15 +1,21 @@
 use std::collections::HashMap;
 
-use cli_log::info;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     board::Board,
     game_utils::Move,
     piece::{Piece, PieceType},
     player::{Player, PlayerId},
 };
+use cli_log::info;
+use serde::{Deserialize, Serialize};
 
+#[derive(Debug)]
+pub enum ClientEvent {
+    GoToGame(HashMap<PlayerId, Player>, PlayerId),
+    GoToMenu(EndGameReason),
+    GoToLobby(String, String),
+    SendToServer(GameEvent),
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EndGameReason {
     PlayerLeft { player_id: PlayerId },
@@ -58,25 +64,29 @@ impl GameState {
         self.reduce(event)?;
         Ok(())
     }
-    pub fn reduce(&mut self, event: &GameEvent) -> Result<(), String> {
+    pub fn reduce(&mut self, event: &GameEvent) -> Result<Option<ClientEvent>, String> {
+        self.history.push(event.clone());
         match event {
             GameEvent::Move { mv, player_id } => {
                 self.move_pawn(mv, *player_id)?;
+                return Ok(None);
             }
             GameEvent::TurnChanged { player_id } => {
                 self.is_turn = *player_id;
+                return Ok(None);
             }
-            GameEvent::PlayerJoined { .. } => {}
+            GameEvent::PlayerJoined { .. } => {
+                return Ok(None);
+            }
             GameEvent::PlayerLeft { player_id } => {
                 self.players.remove(player_id).unwrap();
-                ()
+                return Ok(None);
             }
             GameEvent::EndGame { reason } => {
                 info!("Game ended: {:?}", reason);
+                return Ok(Some(ClientEvent::GoToMenu));
             }
         }
-        self.history.push(event.clone());
-        Ok(())
     }
 
     pub fn validate(&self, event: &GameEvent) -> Result<(), String> {

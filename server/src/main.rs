@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::time::{Duration, Instant, SystemTime};
 use store::PROTOCOL_ID;
-use store::game_state::{GameEvent, GameState};
+use store::game_state::{EndGameReason, GameEvent, GameState};
 use store::player::{Player, PlayerId};
 use store::utils::from_user_data;
 
@@ -103,6 +103,33 @@ fn main() {
                 }
                 ServerEvent::ClientDisconnected { client_id, reason } => {
                     info!("😢 Client disconnected! {client_id}, reason: {reason}");
+                    if let Some(state) = &mut game_state {
+                        // a player disconnected
+                        let disconnect_event = GameEvent::PlayerLeft {
+                            player_id: client_id,
+                        };
+                        if state.dispatch(&disconnect_event).is_err() {
+                            info!("❌ Error attempting to consume a PlayerLeft event");
+                        }
+                        server.broadcast_message(
+                            DefaultChannel::ReliableOrdered,
+                            postcard::to_allocvec(&disconnect_event).unwrap(),
+                        );
+
+                        // the game ends
+                        let end_game = GameEvent::EndGame {
+                            reason: EndGameReason::PlayerLeft {
+                                player_id: client_id,
+                            },
+                        };
+                        if state.dispatch(&end_game).is_err() {
+                            info!("❌ Error attempting to consume a EndGame event");
+                        }
+                        server.broadcast_message(
+                            DefaultChannel::ReliableOrdered,
+                            postcard::to_allocvec(&end_game).unwrap(),
+                        );
+                    }
                 }
             }
         }

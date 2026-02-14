@@ -39,12 +39,16 @@ pub fn is_white(coords: Coords) -> bool {
     (coords.x + coords.y) % 2 == 0
 }
 
-pub fn get_possible_moves(grid: &Board, original_cell: Coords, player: &Player) -> Vec<Move> {
+pub fn get_possible_moves(
+    grid: &Board,
+    original_cell: Coords,
+    player: &Player,
+) -> Result<Vec<Move>, String> {
     let mut moves = vec![];
 
     // check edible moves
     original_cell
-        .diag() // this gets consumed?
+        .diag()
         .into_iter()
         .filter(|cell| grid[*cell].is_some_and(|c| c.player_id != player.id))
         .for_each(|edible_coords| {
@@ -87,11 +91,11 @@ pub fn get_possible_moves(grid: &Board, original_cell: Coords, player: &Player) 
 
     // rule: forced to capture if can capture
     if !moves.is_empty() {
-        return moves;
+        return Ok(moves);
     }
 
     original_cell
-        .diag() // this gets consumed?
+        .diag()
         .into_iter()
         .filter(|cell| grid[*cell].is_none())
         .for_each(|empty_coords| {
@@ -113,5 +117,5 @@ pub fn get_possible_moves(grid: &Board, original_cell: Coords, player: &Player) 
                 }
             }
         });
-    moves
+    Ok(moves)
 }
