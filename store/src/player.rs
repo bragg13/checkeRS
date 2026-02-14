@@ -29,7 +29,6 @@ impl Player {
             .fg(name_color),
             format!(" score:").white(),
             format!(" {}", self.score).white().bold(),
-            format!(" ({})", self.direction).white().bold(),
         ])
     }
 }

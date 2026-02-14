@@ -83,7 +83,7 @@ pub fn run_net_thread(
                         info!("Game ended, exiting network thread...");
                         break;
                     }
-                    GameEvent::Move { mv, player_id } => match postcard::to_allocvec(&game_event) {
+                    GameEvent::Move { .. } => match postcard::to_allocvec(&game_event) {
                         Ok(bytes) => client.send_message(DefaultChannel::ReliableOrdered, bytes),
                         Err(_) => {
                             info!("Error while serializing game event")

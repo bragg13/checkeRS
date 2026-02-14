@@ -1,3 +1,10 @@
+use crossterm::event::KeyEvent;
+use ratatui::prelude::Widget;
+use ratatui::{buffer::Buffer, layout::Rect};
+use store::game_state::{ClientEvent, GameEvent};
+
+use crate::{game::GameScene, main_menu::MainMenuScene};
+
 #[derive(Debug)]
 pub enum Scene {
     Menu(MainMenuScene),

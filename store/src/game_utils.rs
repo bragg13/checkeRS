@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{CELL_N, board::Board, coords::Coords, player::Player};
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum Move {
     Simple {
         from: Coords,

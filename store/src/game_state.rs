@@ -84,7 +84,7 @@ impl GameState {
             }
             GameEvent::EndGame { reason } => {
                 info!("Game ended: {:?}", reason);
-                return Ok(Some(ClientEvent::GoToMenu));
+                return Ok(Some(ClientEvent::GoToMenu(reason.clone())));
             }
         }
     }

@@ -25,7 +25,7 @@ use store::{
     player::PlayerId,
 };
 
-use crate::{game::GameScene, main_menu::MainMenuScene, network::run_net_thread};
+use crate::{game::GameScene, main_menu::MainMenuScene, network::run_net_thread, scene::Scene};
 
 #[derive(Debug)]
 pub struct App {
@@ -125,27 +125,6 @@ impl App {
                                             }
                                         }
                                     }
-                                    ClientEvent::GoToMenu(end_game_reason) => {
-                                        // disconnect the net thread, delete channel, and go to menu
-                                        if let Some(tx) = &self.main_to_network_tx {
-                                            if tx
-                                                .send(ClientToServerMessage::SendEvent(
-                                                    GameEvent::EndGame {
-                                                        reason: end_game_reason,
-                                                    },
-                                                ))
-                                                .is_err()
-                                            {
-                                                info!(
-                                                    "❌ Something happened while going to menu..."
-                                                )
-                                            }
-                                        }
-                                        self.main_to_network_tx = None;
-                                        self.current_scene = Scene::Menu(MainMenuScene::new(
-                                            "you won the previous game!".into(), // TODO: could have lost
-                                        ));
-                                    }
                                     _ => {}
                                 }
                             }
@@ -163,9 +142,27 @@ impl App {
                                     starting_player,
                                 ))
                             }
-                            ClientEvent::GoToMenu => todo!(),
+                            ClientEvent::GoToMenu(end_game_reason) => {
+                                // disconnect the net thread, delete channel, and go to menu
+                                if let Some(tx) = &self.main_to_network_tx {
+                                    if tx
+                                        .send(ClientToServerMessage::SendEvent(
+                                            GameEvent::EndGame {
+                                                reason: end_game_reason,
+                                            },
+                                        ))
+                                        .is_err()
+                                    {
+                                        info!("❌ Something happened while going to menu...")
+                                    }
+                                }
+                                self.main_to_network_tx = None;
+
+                                self.current_scene =
+                                    Scene::Menu(MainMenuScene::new(Some(end_game_reason)));
+                            }
                             ClientEvent::GoToLobby(_, _) => todo!(),
-                            ClientEvent::SendToServer(game_event) => todo!(),
+                            ClientEvent::SendToServer(_game_event) => todo!(),
                         }
                     }
                 }

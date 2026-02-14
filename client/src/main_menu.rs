@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::MatchIndices};
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Widget},
 };
 use store::{
-    game_state::{ClientEvent, GameEvent},
+    game_state::{ClientEvent, EndGameReason, GameEvent},
     player::{Player, PlayerId},
 };
 use tui_input::{Input, backend::crossterm::EventHandler};
@@ -20,7 +20,7 @@ pub struct MainMenuScene {
     addr_in: Input,
     focused: usize,
     num_players: usize,
-    additional_message: Option<String>,
+    prev_end_game_reason: Option<EndGameReason>,
 }
 
 impl Widget for &MainMenuScene {
@@ -93,10 +93,18 @@ impl Widget for &MainMenuScene {
                 }),
                 buf,
             );
-        } else if let Some(msg) = self.additional_message {
+        } else if let Some(reason) = &self.prev_end_game_reason {
             let block = Block::bordered().title("Alert");
             let popup_area = popup_area(area, 60, 20);
-            let simple = Paragraph::new(format!("{}", msg));
+
+            let simple = Paragraph::new(match reason {
+                EndGameReason::PlayerLeft { player_id } => {
+                    format!("You won the previous game because {player_id} left the game!")
+                }
+                EndGameReason::PlayerWon { winner } => {
+                    format!("Player {winner} won the previous game!") // TODO: make this happen in Game and show username and score
+                }
+            });
             Clear.render(popup_area, buf);
             block.render(popup_area, buf);
             simple.render(
@@ -111,7 +119,7 @@ impl Widget for &MainMenuScene {
 }
 
 impl MainMenuScene {
-    pub fn new(additional_message: Option<String>) -> Self {
+    pub fn new(prev_end_game_reason: Option<EndGameReason>) -> Self {
         Self {
             submit: false,
             username_in: Input::default().with_value("andrea".into()),
@@ -119,7 +127,7 @@ impl MainMenuScene {
             focused: 2,
             num_players: 0,
             players: HashMap::new(),
-            additional_message: additional_message,
+            prev_end_game_reason: prev_end_game_reason,
         }
     }
     fn can_submit(&self) -> bool {
