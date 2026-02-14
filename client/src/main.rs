@@ -148,7 +148,7 @@ impl App {
                                     if tx
                                         .send(ClientToServerMessage::SendEvent(
                                             GameEvent::EndGame {
-                                                reason: end_game_reason,
+                                                reason: end_game_reason.clone(),
                                             },
                                         ))
                                         .is_err()
@@ -159,7 +159,7 @@ impl App {
                                 self.main_to_network_tx = None;
 
                                 self.current_scene =
-                                    Scene::Menu(MainMenuScene::new(Some(end_game_reason)));
+                                    Scene::Menu(MainMenuScene::new(Some(end_game_reason.clone())));
                             }
                             ClientEvent::GoToLobby(_, _) => todo!(),
                             ClientEvent::SendToServer(_game_event) => todo!(),
@@ -196,7 +196,7 @@ impl Widget for &App {
         let title = Line::from("Checkers game").centered();
         let instructions = Line::from(vec![
             "Move ".into(),
-            "<Arrows/HJKL>".blue().bold(),
+            "<Arrows>".blue().bold(),
             " Select ".into(),
             "<space>".blue().bold(),
             " Quit ".into(),

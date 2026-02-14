@@ -1,3 +1,4 @@
+use ratatui::style::palette::tailwind::YELLOW;
 use serde::{Deserialize, Serialize};
 
 use crate::{CELL_N, board::Board, coords::Coords, player::Player};
@@ -52,40 +53,64 @@ pub fn get_possible_moves(
         .into_iter()
         .filter(|cell| grid[*cell].is_some_and(|c| c.player_id != player.id))
         .for_each(|edible_coords| {
-            // let offset_y = edible_coords.y - original_cell.y;
-            // let offset_x = edible_coords.x - original_cell.x;
-            let mut landing_coords = edible_coords;
-
-            if player.direction == 1 {
+            let landing_coords = if player.direction == 1 {
                 // look towards up (+1)
                 if edible_coords.x > original_cell.x {
-                    // this diagonal original_cell is on the right
-                    landing_coords.x += 1;
-                    landing_coords.y -= 1;
+                    if edible_coords.x < CELL_N - 1 && edible_coords.y > 0 {
+                        // this diagonal original_cell is on the right
+                        Some(Coords {
+                            x: edible_coords.x + 1,
+                            y: edible_coords.y - 1,
+                        })
+                    } else {
+                        None
+                    }
                 } else if edible_coords.x < original_cell.x {
-                    // this diagonal original_cell is on the LEFT
-                    landing_coords.x -= 1;
-                    landing_coords.y -= 1;
+                    if edible_coords.x > 0 && edible_coords.y > 0 {
+                        Some(Coords {
+                            x: edible_coords.x - 1,
+                            y: edible_coords.y - 1,
+                        })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
                 }
             } else {
                 // move towards down (-1)
                 if edible_coords.x > original_cell.x {
                     // this diagonal original_cell is on the right
-                    landing_coords.x += 1;
-                    landing_coords.y += 1;
+                    if edible_coords.x < CELL_N - 1 && edible_coords.y < CELL_N - 1 {
+                        Some(Coords {
+                            x: edible_coords.x + 1,
+                            y: edible_coords.y + 1,
+                        })
+                    } else {
+                        None
+                    }
                 } else if edible_coords.x < original_cell.x {
                     // this diagonal original_cell is on the LEFT
-                    landing_coords.x -= 1;
-                    landing_coords.y += 1;
+                    if edible_coords.x > 0 && edible_coords.y < CELL_N - 1 {
+                        Some(Coords {
+                            x: edible_coords.x - 1,
+                            y: edible_coords.y + 1,
+                        })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
                 }
-            }
-            match grid[landing_coords] {
-                Some(_) => {}
-                None => moves.push(Move::Capture {
-                    from: original_cell,
-                    to: landing_coords,
-                    eat: edible_coords,
-                }),
+            };
+            if let Some(landing) = landing_coords {
+                if grid[landing].is_none() {
+                    moves.push(Move::Capture {
+                        from: original_cell,
+                        to: landing,
+                        eat: edible_coords,
+                    })
+                }
             }
         });
 
