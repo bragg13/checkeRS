@@ -1,12 +1,13 @@
 mod game;
 mod main_menu;
+mod network;
+mod scene;
 use std::{
     collections::HashMap,
     io,
-    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
-    sync::mpsc,
+    sync::mpsc::{self, RecvTimeoutError},
     thread,
-    time::{Duration, Instant, SystemTime},
+    time::Duration,
 };
 
 use cli_log::{LevelFilter, info};
@@ -19,49 +20,12 @@ use ratatui::{
     text::Line,
     widgets::{Block, Widget},
 };
-use renet::{ClientId, ConnectionConfig, DefaultChannel, RenetClient};
-use renet_netcode::{ClientAuthentication, NetcodeClientTransport};
 use store::{
-    PROTOCOL_ID,
-    game_state::GameEvent,
-    player::{Player, PlayerId},
-    utils::to_netcode_user_data,
+    game_state::{ClientEvent, EndGameReason, GameEvent},
+    player::PlayerId,
 };
 
-use crate::{game::GameScene, main_menu::MainMenuScene};
-
-#[derive(Debug)]
-pub enum Scene {
-    Menu(MainMenuScene),
-    Game(GameScene),
-}
-#[derive(Debug)]
-pub enum ClientEvent {
-    GoToGame(HashMap<PlayerId, Player>, PlayerId),
-    GoToMenu,
-    GoToLobby(String, String),
-    SendToServer(GameEvent),
-}
-impl Scene {
-    pub fn handle_input(&mut self, key_event: KeyEvent) -> Option<ClientEvent> {
-        match self {
-            Scene::Menu(menu) => menu.handle_input(key_event),
-            Scene::Game(game_scene) => game_scene.handle_input(key_event),
-        }
-    }
-    pub fn handle_event(&mut self, game_event: GameEvent) -> Option<ClientEvent> {
-        match self {
-            Scene::Menu(menu) => menu.handle_server_events(game_event),
-            Scene::Game(game_scene) => game_scene.handle_server_events(game_event),
-        }
-    }
-    pub fn handle_render(&self, area: Rect, buf: &mut Buffer) {
-        match self {
-            Scene::Menu(main_menu_scene) => main_menu_scene.render(area, buf),
-            Scene::Game(game_scene) => game_scene.render(area, buf),
-        }
-    }
-}
+use crate::{game::GameScene, main_menu::MainMenuScene, network::run_net_thread};
 
 #[derive(Debug)]
 pub struct App {
@@ -81,7 +45,6 @@ pub enum IncomingEvent {
 // events that the client can send to the server
 pub enum ClientToServerMessage {
     SendEvent(GameEvent),
-    // Disconnect, // this could be a game event maybe
 }
 
 fn handle_input_events(tx: mpsc::Sender<IncomingEvent>) {
@@ -95,121 +58,11 @@ fn handle_input_events(tx: mpsc::Sender<IncomingEvent>) {
     }
 }
 
-fn run_net_thread(
-    network_to_main_tx: mpsc::Sender<IncomingEvent>,
-    main_to_network_rx: mpsc::Receiver<ClientToServerMessage>,
-    username: String,
-    address: String,
-) {
-    let server_addr: SocketAddr = match address.parse() {
-        Ok(addr) => addr,
-        Err(e) => {
-            info!("❌ Invalid address '{}': {}", address, e);
-            return;
-        }
-    };
-    let client_addr: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0);
-
-    let socket = match UdpSocket::bind(client_addr) {
-        Ok(s) => s,
-        Err(e) => {
-            info!("❌ Failed to bind socket: {}", e);
-            return;
-        }
-    };
-    let current_time = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap();
-
-    let client_id = ClientId::from(current_time.as_millis() as u64);
-    if network_to_main_tx
-        .send(IncomingEvent::ClientIdCommunication(client_id))
-        .is_err()
-    {
-        info!("❌ Failed to communicate client id to main thread");
-        return;
-    }
-    let mut client = RenetClient::new(ConnectionConfig::default());
-
-    let auth = ClientAuthentication::Unsecure {
-        client_id,
-        protocol_id: PROTOCOL_ID,
-        server_addr: server_addr,
-        user_data: Some(to_netcode_user_data(username)),
-    };
-
-    let mut transport = match NetcodeClientTransport::new(current_time, auth, socket) {
-        Ok(t) => t,
-        Err(e) => {
-            info!("❌ Failed to create transport: {}", e);
-            return;
-        }
-    };
-
-    let mut last_updated = Instant::now();
-
-    loop {
-        let now = Instant::now();
-        let duration = now - last_updated;
-        last_updated = now;
-
-        client.update(duration);
-        if let Err(e) = transport.update(duration, &mut client) {
-            info!("❌ Transport error: {}", e);
-            break;
-        };
-
-        // get Move instruction from input thread and send to server
-        while let Ok(command) = main_to_network_rx.try_recv() {
-            match command {
-                ClientToServerMessage::SendEvent(game_event) => {
-                    match postcard::to_allocvec(&game_event) {
-                        Ok(bytes) => client.send_message(DefaultChannel::ReliableOrdered, bytes),
-                        Err(_) => {
-                            info!("Error while serializing game event")
-                        }
-                    }
-                } // ClientToServerMessage::Disconnect => {
-                  //     return;
-                  // }
-            }
-        }
-
-        // event from server
-        if client.is_connected() {
-            while let Some(message) = client.receive_message(DefaultChannel::ReliableOrdered) {
-                match postcard::from_bytes::<GameEvent>(&message) {
-                    // .... we send it to the main thread to be handled
-                    Ok(game_event) => {
-                        if network_to_main_tx
-                            .send(IncomingEvent::ServerMessage(game_event))
-                            .is_err()
-                        {
-                            info!("❌ Main thread closed, exiting network thread");
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        info!("⚠️ Failed to deserialize message: {}", e);
-                    }
-                }
-            }
-        }
-        if let Err(e) = transport.send_packets(&mut client) {
-            info!("❌ Failed to send packets: {}", e);
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(16));
-    }
-    info!("🔌 Network thread exiting");
-}
-
-/// ====== MAIN APP =======
 impl App {
     pub fn new() -> Self {
         Self {
             exit: false,
-            current_scene: Scene::Menu(MainMenuScene::new()),
+            current_scene: Scene::Menu(MainMenuScene::new(None)),
             player_id: 0,
             main_to_network_tx: None,
         }
@@ -260,16 +113,38 @@ impl App {
                                             );
                                         });
                                     }
-                                    // when selecting a cell to move to as a client
                                     ClientEvent::SendToServer(game_event) => {
                                         if let Some(tx) = &self.main_to_network_tx {
                                             if tx
                                                 .send(ClientToServerMessage::SendEvent(game_event))
                                                 .is_err()
                                             {
-                                                info!("❌ Something happened...")
+                                                info!(
+                                                    "❌ Something happened while sending event to server..."
+                                                )
                                             }
                                         }
+                                    }
+                                    ClientEvent::GoToMenu(end_game_reason) => {
+                                        // disconnect the net thread, delete channel, and go to menu
+                                        if let Some(tx) = &self.main_to_network_tx {
+                                            if tx
+                                                .send(ClientToServerMessage::SendEvent(
+                                                    GameEvent::EndGame {
+                                                        reason: end_game_reason,
+                                                    },
+                                                ))
+                                                .is_err()
+                                            {
+                                                info!(
+                                                    "❌ Something happened while going to menu..."
+                                                )
+                                            }
+                                        }
+                                        self.main_to_network_tx = None;
+                                        self.current_scene = Scene::Menu(MainMenuScene::new(
+                                            "you won the previous game!".into(), // TODO: could have lost
+                                        ));
                                     }
                                     _ => {}
                                 }
@@ -288,15 +163,18 @@ impl App {
                                     starting_player,
                                 ))
                             }
-                            _ => {}
+                            ClientEvent::GoToMenu => todo!(),
+                            ClientEvent::GoToLobby(_, _) => todo!(),
+                            ClientEvent::SendToServer(game_event) => todo!(),
                         }
                     }
                 }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                Err(RecvTimeoutError::Disconnected) => {
                     info!("🔌 channel closed, exiting...");
+                    self.exit();
                     break;
                 }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
+                Err(RecvTimeoutError::Timeout) => {
                     // IMPORTANT: just continue in case of timeout.
                     // `rx.recv()` would be a blocking instruction
                     // `rx.recv_timeout()` allows me to check the loop condition for self.exit
@@ -340,7 +218,7 @@ impl Widget for &App {
 
 fn main() -> io::Result<()> {
     env_logger::Builder::from_default_env()
-        .filter_level(LevelFilter::Info) // Show all logs
+        .filter_level(LevelFilter::Info)
         .init();
 
     let (event_tx, event_rx) = mpsc::channel::<IncomingEvent>();
@@ -349,6 +227,5 @@ fn main() -> io::Result<()> {
         handle_input_events(tx_to_input_events);
     });
 
-    // UI takes receiver channel from which other threads communicate
     ratatui::run(|terminal| App::new().run(terminal, event_rx, event_tx))
 }

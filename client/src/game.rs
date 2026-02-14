@@ -1,3 +1,4 @@
+use cli_log::info;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Constraint::Length, style::Stylize};
 use std::collections::HashMap;
@@ -15,12 +16,10 @@ use ratatui::{
 use store::{
     CELL_N,
     coords::Coords,
-    game_state::{GameEvent, GameState},
+    game_state::{ClientEvent, GameEvent, GameState},
     game_utils::{Move, coords_to_index, get_possible_moves, is_white},
     player::{Player, PlayerId},
 };
-
-use crate::ClientEvent;
 
 #[derive(Debug)]
 pub struct GameScene {
@@ -67,10 +66,15 @@ impl GameScene {
         }
     }
     pub fn handle_server_events(&mut self, game_event: GameEvent) -> Option<ClientEvent> {
-        self.game_state.reduce(&game_event).unwrap(); // this applies the server update to the client (BLINDLY as im using reduce)
         self.possible_moves.clear();
         self.selected_cell = None;
-        return None;
+        match self.game_state.reduce(&game_event) {
+            Ok(client_event) => return client_event,
+            Err(err) => {
+                info!("❌ Error while reducing game event: {err}");
+                None
+            }
+        }
     }
     fn left(&mut self) {
         if self.cursor_cell.x != 0 {
@@ -105,13 +109,10 @@ impl GameScene {
                 .find(|possible_move| possible_move.to() == self.cursor_cell);
             match selected_move {
                 Some(_mv) => {
-                    // move selected pawn to selected cell
                     return Some(ClientEvent::SendToServer(GameEvent::Move {
-                        mv: selected_move.unwrap().clone(),
+                        mv: selected_move.unwrap().clone(), // TODO
                         player_id: self.player_id,
                     }));
-
-                    // self.game_state.dispatch(&event).unwrap(); // this would be for single player
                 }
                 None => {}
             }
@@ -120,12 +121,16 @@ impl GameScene {
         // selecting our own pawn
         if self.game_state.grid[self.cursor_cell].is_some_and(|x| x.player_id == self.player_id) {
             self.selected_cell = Some(self.cursor_cell);
-            let moves = get_possible_moves(
-                &self.game_state.grid,
-                self.selected_cell.unwrap(),
-                self.game_state.players.get(&self.player_id).unwrap(), // TODO - BREAKS
-            );
-            self.possible_moves = moves;
+            if let Some(selected_cell) = self.selected_cell
+                && let Some(player) = self.game_state.players.get(&self.player_id)
+            {
+                match get_possible_moves(&self.game_state.grid, selected_cell, player) {
+                    Ok(moves) => self.possible_moves = moves,
+                    Err(err) => info!("❌ Error while selecting own's pawn: {err}"),
+                }
+            } else {
+                info!("❌ Could now unwrap `selected_cell` or `player`");
+            }
         }
         return None;
     }

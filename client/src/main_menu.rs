@@ -7,20 +7,20 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Widget},
 };
 use store::{
-    game_state::GameEvent,
+    game_state::{ClientEvent, GameEvent},
     player::{Player, PlayerId},
 };
 use tui_input::{Input, backend::crossterm::EventHandler};
 
-use crate::ClientEvent;
 #[derive(Debug)]
 pub struct MainMenuScene {
-    pub players: HashMap<PlayerId, Player>, // could make sense if i wanted to show players list in lobby...?
+    pub players: HashMap<PlayerId, Player>,
     submit: bool,
     username_in: Input,
     addr_in: Input,
     focused: usize,
     num_players: usize,
+    additional_message: Option<String>,
 }
 
 impl Widget for &MainMenuScene {
@@ -93,12 +93,25 @@ impl Widget for &MainMenuScene {
                 }),
                 buf,
             );
+        } else if let Some(msg) = self.additional_message {
+            let block = Block::bordered().title("Alert");
+            let popup_area = popup_area(area, 60, 20);
+            let simple = Paragraph::new(format!("{}", msg));
+            Clear.render(popup_area, buf);
+            block.render(popup_area, buf);
+            simple.render(
+                popup_area.inner(Margin {
+                    horizontal: 3,
+                    vertical: 3,
+                }),
+                buf,
+            );
         }
     }
 }
 
 impl MainMenuScene {
-    pub fn new() -> Self {
+    pub fn new(additional_message: Option<String>) -> Self {
         Self {
             submit: false,
             username_in: Input::default().with_value("andrea".into()),
@@ -106,6 +119,7 @@ impl MainMenuScene {
             focused: 2,
             num_players: 0,
             players: HashMap::new(),
+            additional_message: additional_message,
         }
     }
     fn can_submit(&self) -> bool {
@@ -129,7 +143,6 @@ impl MainMenuScene {
         match key_event.code {
             KeyCode::Enter => {
                 if self.can_submit() {
-                    // && self.focused == 2 {
                     self.submit = true;
                     Some(ClientEvent::GoToLobby(
                         String::from(self.username_in.value()),
