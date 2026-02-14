@@ -1,6 +1,6 @@
 use cli_log::info;
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{layout::Constraint::Length, style::Stylize};
+use ratatui::{layout::Constraint::Length, style::Stylize, widgets::BorderType};
 use std::collections::HashMap;
 
 use ratatui::{
@@ -195,10 +195,15 @@ impl Widget for &GameScene {
                     },
                     radius: 5.0,
                 };
+                let bg_color = if is_white(coords) {
+                    Color::White
+                } else {
+                    Color::Black
+                };
 
-                let cell_color = if coords == self.cursor_cell {
+                let border_color = if coords == self.cursor_cell {
                     if self.game_state.is_turn == self.player_id {
-                        Color::LightGreen // not my turn
+                        Color::LightGreen
                     } else {
                         Color::Gray
                     }
@@ -215,19 +220,18 @@ impl Widget for &GameScene {
                 {
                     Color::LightYellow
                 } else {
-                    if is_white(coords) {
-                        Color::White
-                    } else {
-                        Color::Black
-                    }
+                    bg_color
                 };
 
                 Canvas::default()
                     .block(
-                        Block::bordered().bg(cell_color).fg(cell_color), //.title(format!("{:?}-{:?}-{:?}", i, j, coords_to_index(coords))),
+                        Block::bordered()
+                            .bg(bg_color)
+                            .fg(border_color)
+                            .border_type(BorderType::Double),
                     )
                     .marker(Marker::Braille)
-                    .background_color(cell_color)
+                    .background_color(bg_color)
                     .x_bounds([0.0, 10.0])
                     .y_bounds([0.0, 10.0])
                     .paint(|ctx| {
