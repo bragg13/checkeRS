@@ -9,7 +9,7 @@ use renet_netcode::{ClientAuthentication, NetcodeClientTransport};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use store::{PROTOCOL_ID, game_state::GameEvent, utils::to_netcode_user_data};
 
-use crate::{ClientToServerMessage, IncomingEvent, game};
+use crate::{ClientToServerMessage, IncomingEvent};
 
 pub fn run_net_thread(
     network_to_main_tx: mpsc::Sender<IncomingEvent>,

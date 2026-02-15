@@ -1,4 +1,3 @@
-use ratatui::style::palette::tailwind::YELLOW;
 use serde::{Deserialize, Serialize};
 
 use crate::{CELL_N, board::Board, coords::Coords, player::Player};

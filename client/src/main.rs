@@ -3,7 +3,6 @@ mod main_menu;
 mod network;
 mod scene;
 use std::{
-    collections::HashMap,
     io,
     sync::mpsc::{self, RecvTimeoutError},
     thread,
@@ -11,7 +10,7 @@ use std::{
 };
 
 use cli_log::{LevelFilter, info};
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -21,7 +20,7 @@ use ratatui::{
     widgets::{Block, Widget},
 };
 use store::{
-    game_state::{ClientEvent, EndGameReason, GameEvent},
+    game_state::{ClientEvent, GameEvent},
     player::PlayerId,
 };
 

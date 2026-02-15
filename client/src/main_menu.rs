@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::MatchIndices};
+use std::collections::HashMap;
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
@@ -122,9 +122,9 @@ impl MainMenuScene {
     pub fn new(prev_end_game_reason: Option<EndGameReason>) -> Self {
         Self {
             submit: false,
-            username_in: Input::default().with_value("andrea".into()),
+            username_in: Input::default().with_value("".into()),
             addr_in: Input::default().with_value("127.0.0.1:5000".into()),
-            focused: 2,
+            focused: 0,
             num_players: 0,
             players: HashMap::new(),
             prev_end_game_reason: prev_end_game_reason,
