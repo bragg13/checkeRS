@@ -11,9 +11,9 @@ Roadmap:
 - [x] Pawn movement (simple, eating)
 - [x] Client-server communication implementation
 - [x] Main menu to select name and address
-- [] Winning logic
-- [] Pawn getting crowned
-- [] Better scene management (eg. restart game, go to menu,...)
+- [ ] Winning logic
+- [ ] Pawn getting crowned
+- [ ] Better scene management (eg. restart game, go to menu,...)
 
 How to run:
 
