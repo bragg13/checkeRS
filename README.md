@@ -1,9 +1,13 @@
 # checkeRS
 A (PoC) Rust implementation of the board game checkers.
 
+<img width="1508" height="864" alt="image" src="https://github.com/user-attachments/assets/42081d13-ad97-4aa3-b002-6da583cc080d" />
+
 The game is not complete; in fact, it was intended only as a way to get familiar with Rust, TUIs (ratatui in this case), and Client-Server multiplayer gaming (with renet).
 
 I took free inspiration from [this post by Herluf-ba](https://herluf-ba.github.io/making-a-turn-based-multiplayer-game-in-rust-01-whats-a-turn-based-game-anyway).
+
+![Example video](https://github.com/user-attachments/assets/a6edb981-2eb2-4ef4-991a-31776747aa9f)
 
 Roadmap:
 - [x] TUI drawing
@@ -11,6 +15,7 @@ Roadmap:
 - [x] Pawn movement (simple, eating)
 - [x] Client-server communication implementation
 - [x] Main menu to select name and address
+
 - [ ] Winning logic
 - [ ] Pawn getting crowned
 - [ ] Better scene management (eg. restart game, go to menu,...)
